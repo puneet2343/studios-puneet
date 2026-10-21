@@ -4,7 +4,7 @@ import { mimeType } from "@/lib/media";
 import { serveFile } from "@/lib/serve-file";
 
 // Tickets, booking PDFs and receipts attached to a trip.
-// PUT ?trip=…&name=…   (body: the file)  -> { file }
+// PUT ?trip=…&name=…[&id=…]   (body: the file)  -> { file }   (id: chosen by the phone for offline receipts)
 // GET ?trip=…&file=…                     -> the file (inline; &download=1 to save it)
 // DELETE ?trip=…&file=…
 function failed(error) {
@@ -17,7 +17,7 @@ export async function PUT(request) {
   const params = request.nextUrl.searchParams;
   if (!request.body) return Response.json({ error: "Empty file" }, { status: 400 });
   try {
-    const file = await addPlanFile(params.get("trip"), params.get("name") || "file", request.headers.get("content-type"), request.body, Number(request.headers.get("content-length")) || 0);
+    const file = await addPlanFile(params.get("trip"), params.get("name") || "file", request.headers.get("content-type"), request.body, Number(request.headers.get("content-length")) || 0, params.get("id"));
     return Response.json({ file }, { status: 201 });
   } catch (error) {
     return failed(error);

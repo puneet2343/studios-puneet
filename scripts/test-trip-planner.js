@@ -192,11 +192,11 @@ const day = (n) => { const d = new Date(d0); d.setDate(d.getDate() + n); return 
   // ---- Offline edit, then sync ----
   await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
   await tap(`[...document.querySelectorAll("main ul li button")][2]`, 1800);
-  check("Offline: shows 'will sync'", (await text()).includes("Offline · will sync") || (await text()).includes("Couldn't save"));
+  check("Offline: shows 'will sync'", (await text()).includes("will sync") || (await text()).includes("Couldn't save"));
   await send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
   await js(`window.dispatchEvent(new Event("online"))`);
   await sleep(3000);
-  check("Back online: saved", (await text()).includes("Saved"));
+  check("Back online: saved", (await text()).includes("Saved"), (await text()).slice(0, 90).replace(/\n/g, " | "));
   const st = await serverTrip();
   check("PC has the offline change", st && st.checklist.filter((c) => c.done).length === 2, st ? `${st.checklist.filter((c) => c.done).length} ticked on PC` : "no trip");
   check("PC has everything", st && st.items.length === 3 && st.expenses.length === 2 && st.travellers.length === 2);

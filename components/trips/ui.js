@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/Toaster";
 import { ClipIcon, CloseIcon, FileIcon, ImageIcon } from "@/components/icons";
+import { pendingFiles, queueFile } from "@/components/trips/tripStore";
+import { uid } from "@/components/trips/tripUtils";
 import { formatSize } from "@/lib/format";
 
 export const inputClass =
@@ -85,7 +87,16 @@ export function Attachments({ tripId, files, ids, onAdd, onRemove, accept = "ima
   const toast = useToast();
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [waiting, setWaiting] = useState(() => new Set()); // taken offline, not on the PC yet
   const attached = ids.map((id) => files.find((f) => f.id === id)).filter(Boolean);
+
+  useEffect(() => {
+    let live = true;
+    pendingFiles().then((list) => live && setWaiting(new Set(list.map((f) => f.fileId))));
+    return () => {
+      live = false;
+    };
+  }, [ids.length]);
 
   async function upload(list) {
     const picked = Array.from(list ?? []);
@@ -99,7 +110,18 @@ export function Attachments({ tripId, files, ids, onAdd, onRemove, accept = "ima
       }).catch(() => null);
       const data = res ? await res.json().catch(() => ({})) : {};
       if (res?.ok && data.file) onAdd(data.file);
-      else toast(data.error || "Couldn't attach the file. Check the connection.");
+      else if (!res) {
+        // No signal: keep the photo on the phone; it uploads when the PC is reachable.
+        const meta = { id: uid(), name: file.name || "receipt.jpg", size: file.size, type: file.type || "application/octet-stream", addedAt: Date.now() };
+        try {
+          await queueFile({ fileId: meta.id, tripId, name: meta.name, type: meta.type, blob: file });
+          setWaiting((w) => new Set([...w, meta.id]));
+          onAdd(meta);
+          toast("Saved on this phone — uploads when there's signal");
+        } catch {
+          toast("Couldn't keep the file on this phone");
+        }
+      } else toast(data.error || "Couldn't attach the file.");
     }
     setBusy(false);
   }
@@ -116,7 +138,7 @@ export function Attachments({ tripId, files, ids, onAdd, onRemove, accept = "ima
                 <a href={fileUrl(tripId, f.id)} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-sm text-zinc-100 underline-offset-2 hover:underline">
                   {f.name}
                 </a>
-                <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">{formatSize(f.size)}</span>
+                <span className={`shrink-0 text-[11px] tabular-nums ${waiting.has(f.id) ? "text-amber-200" : "text-zinc-500"}`}>{waiting.has(f.id) ? "Waiting to upload" : formatSize(f.size)}</span>
                 <button type="button" onClick={() => onRemove(f.id)} aria-label={`Remove ${f.name}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/5">
                   <CloseIcon size={15} />
                 </button>

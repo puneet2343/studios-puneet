@@ -34,7 +34,7 @@ const STATUS_TONES = {
 };
 
 function SaveState({ status }) {
-  const text = { saving: "Saving…", saved: "Saved", offline: "Offline · will sync", error: "Couldn't save · retrying", loading: "" }[status] ?? "";
+  const text = { saving: "Saving…", saved: "Saved", offline: "Saved on phone · will sync", error: "Couldn't save · retrying", loading: "" }[status] ?? "";
   return <span className={`text-[11px] ${status === "offline" || status === "error" ? "text-amber-200" : "text-zinc-500"}`}>{text}</span>;
 }
 
@@ -185,7 +185,7 @@ function Overview({ trip, update, onOpenItem, onTab, onToggleDone }) {
 /** One trip: header, tabs, and the add/edit sheets. */
 export default function TripDetail({ id, onBack, onDeleted }) {
   const toast = useToast();
-  const { trip, update, status } = useTrip(id, { onConflict: () => toast("This trip was changed on another device — showing the latest version", { duration: 7000 }) });
+  const { trip, update, status } = useTrip(id, { onConflict: () => toast("Combined with changes made on another device", { duration: 5000 }) });
   const [tab, setTab] = useState(() => {
     try {
       return sessionStorage.getItem(`ps.trip.tab.${id}`) || "overview";
@@ -210,6 +210,16 @@ export default function TripDetail({ id, onBack, onDeleted }) {
     return (
       <Shell onBack={onBack} title="Trip not found">
         <p className="py-16 text-center text-sm text-zinc-500">This trip was deleted.</p>
+      </Shell>
+    );
+  }
+  if (!trip && status === "unavailable") {
+    return (
+      <Shell onBack={onBack} title="No signal">
+        <div className="px-2 py-16 text-center">
+          <p className="text-[15px] font-medium text-zinc-200">This trip isn&apos;t saved on this phone yet</p>
+          <p className="mt-1.5 text-sm text-zinc-500">It opens as soon as there&apos;s signal. Trips you open with signal stay on the phone for next time.</p>
+        </div>
       </Shell>
     );
   }
@@ -281,6 +291,11 @@ export default function TripDetail({ id, onBack, onDeleted }) {
 
   async function deleteTrip() {
     setConfirmDelete(false);
+    // Made on this phone and never reached the PC: nothing to delete there.
+    if (!trip.rev) {
+      dropTripCache(id);
+      return onDeleted(trip.name, null);
+    }
     const res = await fetch(`/api/plans?id=${id}`, { method: "DELETE" }).catch(() => null);
     const data = res?.ok ? await res.json() : null;
     if (!data) return toast("Couldn't delete the trip. Check the connection.");

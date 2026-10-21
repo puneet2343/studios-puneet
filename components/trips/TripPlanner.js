@@ -8,10 +8,10 @@ import useBackClose from "@/components/useBackClose";
 import { thumbUrl } from "@/components/media/urls";
 import TripDetail from "@/components/trips/TripDetail";
 import TripForm from "@/components/trips/TripForm";
-import { fmtRange, money, today, tripStatus } from "@/components/trips/tripUtils";
+import { LIST_KEY, keepTripsOnPhone, syncTrips, withLocalTrips, writeCache } from "@/components/trips/tripStore";
+import { fmtRange, money, today, tripStatus, uid } from "@/components/trips/tripUtils";
 import { haptic } from "@/lib/haptics";
 
-const LIST_KEY = "ps.trips";
 const TONES = {
   upcoming: "bg-sky-500/80 text-[#fff] border-white/25",
   live: "bg-emerald-500/85 text-[#fff] border-white/25",
@@ -72,6 +72,7 @@ function TripCard({ trip, onOpen }) {
             </div>
           )}
           <p className="text-xs text-zinc-500">
+            {trip.waiting && <span className="font-medium text-amber-200">Waiting to sync · </span>}
             {[trip.items ? `${trip.items} in the plan` : "Nothing planned yet", trip.checklist[1] ? `${trip.checklist[0]}/${trip.checklist[1]} checklist` : null, trip.travellers > 1 ? `${trip.travellers} people` : null]
               .filter(Boolean)
               .join(" · ")}
@@ -94,16 +95,27 @@ export default function TripPlanner() {
   const [listStale, setListStale] = useState(false);
 
   const load = useCallback(async () => {
+    await syncTrips(); // anything made or changed offline goes first
     const res = await fetch("/api/plans", { cache: "no-store" }).catch(() => null);
     if (res?.status === 401) return loggedOut();
     const data = res?.ok ? await res.json() : null;
-    if (!data) return setOffline(true);
+    if (!data) {
+      setOffline(true);
+      setTrips(withLocalTrips(readList()));
+      return;
+    }
     setOffline(false);
-    setTrips(data.trips);
+    setTrips(withLocalTrips(data.trips));
     try {
       localStorage.setItem(LIST_KEY, JSON.stringify(data.trips));
     } catch {}
+    keepTripsOnPhone(data.trips); // every trip ready for no-signal use
   }, [loggedOut]);
+
+  useEffect(() => {
+    window.addEventListener("online", load);
+    return () => window.removeEventListener("online", load);
+  }, [load]);
 
   // A trip was just closed (arrow or phone Back): its card needs the latest numbers.
   useEffect(() => {
@@ -118,20 +130,21 @@ export default function TripPlanner() {
   useEffect(() => {
     const first = setTimeout(() => {
       const cached = readList();
-      if (cached) setTrips(cached);
+      if (cached) setTrips(withLocalTrips(cached));
       load();
     }, 0);
     return () => clearTimeout(first);
   }, [load]);
 
-  async function create(fields) {
-    const res = await fetch("/api/plans", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trip: fields }) }).catch(() => null);
-    const data = res?.ok ? await res.json() : null;
-    if (!data) return "Couldn't create the trip. Check the connection.";
+  // Made on the phone first (works with no signal); it reaches the PC with the next sync.
+  function create(fields) {
+    const id = uid();
+    const trip = { destination: "", startDate: null, endDate: null, currency: "INR", budget: null, travellers: [], mediaFolder: null, cover: null, notes: "", ...fields, items: [], expenses: [], checklist: [], files: [], rev: 0 };
+    writeCache(id, trip, true, null);
     setCreating(false);
     haptic("success");
-    await load();
-    setOpenId(data.trip.id);
+    setTrips(withLocalTrips(trips?.filter((t) => !t.waiting) ?? readList()));
+    setOpenId(id);
     setListStale(true);
   }
 
@@ -211,6 +224,7 @@ export default function TripPlanner() {
           onDeleted={(name, undo) => {
             setOpenId(null);
             load();
+            if (!undo) return toast(`Deleted "${name}"`);
             toast(`Deleted "${name}"`, {
               duration: 7000,
               action: {

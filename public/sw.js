@@ -28,10 +28,15 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+// Weak signal can leave a request hanging for a minute; after 4 s use the saved copy.
+function fetchSoon(request, ms = 4000) {
+  return Promise.race([fetch(request), new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
+}
+
 async function page(request) {
   const cache = await caches.open(PAGES);
   try {
-    const response = await fetch(request);
+    const response = await fetchSoon(request);
     // Tailscale answers 502 when the app isn't running; treat that as offline too.
     if (response.ok) {
       cache.put(request, response.clone());
@@ -52,6 +57,32 @@ async function asset(request) {
   const response = await fetch(request);
   if (response.ok) cache.put(request, response.clone());
   return response;
+}
+
+// The app asks (after each load, with signal) to keep every main page ready for offline:
+// the page itself plus the scripts and styles it needs — so even right after an update,
+// a page you haven't visited yet opens with no signal.
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "warm" || !Array.isArray(event.data.paths)) return;
+  event.waitUntil(warm(event.data.paths));
+});
+
+async function warm(paths) {
+  const pages = await caches.open(PAGES);
+  const assets = await caches.open(ASSETS);
+  for (const p of paths) {
+    try {
+      const res = await fetch(p, { credentials: "include" });
+      if (!res.ok || !(res.headers.get("content-type") || "").includes("text/html")) continue;
+      await pages.put(p, res.clone());
+      const html = await res.text();
+      const urls = [...new Set(html.match(/\/_next\/static\/[^"'\s)\\]+/g) || [])];
+      for (const u of urls) if (!(await assets.match(u))) {
+        const a = await fetch(u).catch(() => null);
+        if (a?.ok) await assets.put(u, a);
+      }
+    } catch {}
+  }
 }
 
 // Storage alerts from the studio PC (lib/storage-alerts.js).

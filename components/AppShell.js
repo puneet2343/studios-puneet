@@ -31,6 +31,7 @@ import useBackClose, { closeOverlaysThen, useExitGuard } from "@/components/useB
 import { formatSize } from "@/lib/format";
 import { storageLevel } from "@/lib/storage-levels";
 import { StorageAlertsSwitch } from "@/components/StorageAlerts";
+import { syncTrips } from "@/components/trips/tripStore";
 
 // Add new features here: a live item needs an href; items without one show as "Soon".
 // `tab: true` also puts it in the phone's bottom tab bar.
@@ -63,6 +64,7 @@ const NAV = [
   },
 ];
 const TABS = NAV.flatMap((g) => g.items).filter((i) => i.tab);
+const PAGES = NAV.flatMap((g) => g.items).filter((i) => i.href).map((i) => i.href);
 // On phones these live in the "More" sheet.
 const TOOLS = NAV.flatMap((g) => g.items).filter((i) => i.tool);
 const AUTH_HINT = "ps.authed";
@@ -230,6 +232,22 @@ export default function AppShell({ children }) {
     const timer = setInterval(check, 5000);
     return () => clearInterval(timer);
   }, [authed, check]);
+
+  // Signed in, with signal: keep every page ready for no-signal use (public/sw.js), and
+  // send trips and receipts that were saved on the phone while offline.
+  useEffect(() => {
+    if (authed !== true) return;
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.ready.then((reg) => reg.active?.postMessage({ type: "warm", paths: PAGES })).catch(() => {});
+    }
+    syncTrips();
+    const timer = setInterval(syncTrips, 30000);
+    window.addEventListener("online", syncTrips);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", syncTrips);
+    };
+  }, [authed]);
 
   const loggedOut = useCallback(() => {
     setAuthHint(false);

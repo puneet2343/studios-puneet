@@ -1,35 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { openTrips, pushTrip, readCache, syncTrips, writeCache } from "@/components/trips/tripStore";
 
-// One trip, kept on the phone too (so it opens with no signal while travelling) and
-// saved to the PC a moment after each change. Edits made offline are kept and sent
-// when the connection comes back. If another device saved first, its version wins
-// and the screen shows it (nothing is silently overwritten on the PC).
-const cacheKey = (id) => `ps.trip.${id}`;
+export { dropTripCache } from "@/components/trips/tripStore";
 
-function readCache(id) {
-  try {
-    return JSON.parse(localStorage.getItem(cacheKey(id)) || "null");
-  } catch {
-    return null;
-  }
-}
-function writeCache(id, trip, dirty) {
-  try {
-    localStorage.setItem(cacheKey(id), JSON.stringify({ trip, dirty }));
-  } catch {}
-}
-export function dropTripCache(id) {
-  try {
-    localStorage.removeItem(cacheKey(id));
-  } catch {}
-}
-
+// One trip, kept on the phone (so it works with no signal while travelling) and saved to
+// the PC a moment after each change. Edits made offline wait on the phone and go out when
+// the connection is back. If the PC's copy changed meanwhile, both sets of changes are merged.
 export default function useTrip(id, { onConflict } = {}) {
   const [trip, setTrip] = useState(null);
-  const [status, setStatus] = useState("loading"); // loading | saved | saving | offline | error | missing
+  // loading | saved | saving | offline | error | missing | unavailable (not on this phone, no signal)
+  const [status, setStatus] = useState("loading");
+  const [attempt, setAttempt] = useState(0); // retry opening a trip that wasn't on the phone
   const tripRef = useRef(null);
+  const baseRef = useRef(null);
   const dirty = useRef(false);
   const edits = useRef(0);
   const timer = useRef(null);
@@ -41,43 +26,34 @@ export default function useTrip(id, { onConflict } = {}) {
     conflictRef.current = onConflict;
   }, [onConflict]);
 
+  useEffect(() => {
+    openTrips.add(id);
+    return () => openTrips.delete(id);
+  }, [id]);
+
   const save = useCallback(async () => {
     if (!dirty.current || saving.current || !tripRef.current) return;
     saving.current = true;
     const sentEdits = edits.current;
+    const sent = tripRef.current;
     setStatus("saving");
-    const { rev, ...doc } = tripRef.current;
-    const res = await fetch(`/api/plans?id=${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trip: doc, rev }),
-    }).catch(() => null);
+    const r = await pushTrip(id, sent, baseRef.current);
     saving.current = false;
-    if (!res) {
-      setStatus("offline");
-      return;
-    }
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 409 && data.trip) {
-      // Another device saved first: take its version.
+    if (r.offline) return setStatus("offline");
+    if (!r.ok) return setStatus("error");
+    baseRef.current = r.trip;
+    if (edits.current === sentEdits) {
+      // Nothing new meanwhile: the PC now has exactly this (merged) trip.
       dirty.current = false;
-      tripRef.current = data.trip;
-      setTrip(data.trip);
-      writeCache(id, data.trip, false);
-      setStatus("saved");
-      conflictRef.current?.();
-      return;
+      tripRef.current = r.trip;
+    } else {
+      // Keep the edits made while this save was on its way, on top of the new revision.
+      tripRef.current = { ...tripRef.current, rev: r.trip.rev };
     }
-    if (!res.ok) {
-      setStatus("error");
-      return;
-    }
-    // Keep any edits made while this save was on its way, on top of the new revision.
-    tripRef.current = { ...tripRef.current, rev: data.trip.rev };
-    if (edits.current === sentEdits) dirty.current = false;
-    writeCache(id, tripRef.current, dirty.current);
+    writeCache(id, tripRef.current, dirty.current, baseRef.current);
     setTrip(tripRef.current);
     setStatus(dirty.current ? "saving" : "saved");
+    if (r.merged) conflictRef.current?.();
     if (dirty.current) timer.current = setTimeout(() => saveRef.current?.(), 300);
   }, [id]);
 
@@ -92,6 +68,7 @@ export default function useTrip(id, { onConflict } = {}) {
     const first = setTimeout(async () => {
       if (cached?.trip) {
         tripRef.current = cached.trip;
+        baseRef.current = cached.base ?? null;
         dirty.current = Boolean(cached.dirty);
         setTrip(cached.trip);
         setStatus(cached.dirty ? "offline" : "saved");
@@ -99,13 +76,14 @@ export default function useTrip(id, { onConflict } = {}) {
       if (dirty.current) return save();
       const res = await fetch(`/api/plans?id=${id}`, { cache: "no-store" }).catch(() => null);
       if (!live) return;
-      if (!res) return setStatus(cached ? "offline" : "error");
+      if (!res) return setStatus(cached?.trip ? "saved" : "unavailable");
       if (res.status === 404) return setStatus("missing");
       const data = await res.json().catch(() => null);
       if (data?.trip && !dirty.current) {
         tripRef.current = data.trip;
+        baseRef.current = data.trip;
         setTrip(data.trip);
-        writeCache(id, data.trip, false);
+        writeCache(id, data.trip, false, data.trip);
         setStatus("saved");
       }
     }, 0);
@@ -113,11 +91,14 @@ export default function useTrip(id, { onConflict } = {}) {
       live = false;
       clearTimeout(first);
     };
-  }, [id, save]);
+  }, [id, save, attempt]);
 
   // Offline edits go out as soon as the phone is back online (and every 15 s meanwhile).
   useEffect(() => {
-    const retry = () => dirty.current && save();
+    const retry = () => {
+      if (dirty.current) save();
+      if (!tripRef.current) setAttempt((a) => a + 1);
+    };
     window.addEventListener("online", retry);
     const t = setInterval(retry, 15000);
     return () => {
@@ -126,13 +107,14 @@ export default function useTrip(id, { onConflict } = {}) {
     };
   }, [save]);
 
-  // Flush on leaving the screen.
+  // Leaving the screen: send what's left (and anything else waiting on the phone).
   useEffect(
     () => () => {
       clearTimeout(timer.current);
-      if (dirty.current) save();
+      openTrips.delete(id);
+      if (dirty.current) save().then(() => syncTrips());
     },
-    [save]
+    [id, save]
   );
 
   // Change the trip: `fn` gets the current trip and returns the new one.
@@ -144,8 +126,8 @@ export default function useTrip(id, { onConflict } = {}) {
       dirty.current = true;
       edits.current++;
       setTrip(next);
-      writeCache(id, next, true);
-      setStatus("saving");
+      writeCache(id, next, true, baseRef.current);
+      setStatus((s) => (s === "offline" ? "offline" : "saving"));
       clearTimeout(timer.current);
       timer.current = setTimeout(() => save(), 700);
     },
