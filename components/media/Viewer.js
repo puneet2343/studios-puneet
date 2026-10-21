@@ -136,7 +136,9 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
 
   // Swipe gestures follow the finger: sideways browses, downwards closes.
   function onTouchStart(e) {
-    if (e.touches.length > 1 || e.target.closest("video, button, a, aside, [data-player], [data-zoomed]")) return;
+    // Swipes work on photos and videos alike; only the player's own controls (seek bar,
+    // buttons, menus) and a zoomed-in photo keep the finger to themselves.
+    if (e.touches.length > 1 || e.target.closest("button, a, aside, [role=dialog], [data-control], [data-zoomed]")) return;
     gesture.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, axis: null };
   }
   function onTouchMove(e) {

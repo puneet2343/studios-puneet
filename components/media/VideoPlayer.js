@@ -100,6 +100,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
   const [notice, setNotice] = useState("");
   const switching = useRef(null); // { time, play } carried across a quality switch
   const stalls = useRef([]);
+  const downAt = useRef(null); // where the finger went down, to tell taps from swipes
 
   // ----- Quality -----
   const name = file.path ?? file.name;
@@ -314,6 +315,9 @@ export default function VideoPlayer({ file, onControls, onError }) {
   // ----- Taps on the picture -----
   function onSurfaceUp(e) {
     if (e.target.closest("[data-control]")) return;
+    // A finger that travelled was a swipe (next / previous / close), not a tap.
+    const down = downAt.current;
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) return;
     setSpeedMenu(false);
     const rect = root.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
@@ -393,6 +397,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
     <div
       ref={root}
       data-player
+      onPointerDown={(e) => (downAt.current = { x: e.clientX, y: e.clientY })}
       onPointerUp={onSurfaceUp}
       onPointerMove={(e) => e.pointerType === "mouse" && show()}
       className={`relative flex h-full w-full select-none items-center justify-center overflow-hidden bg-black ${
