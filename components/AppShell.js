@@ -20,6 +20,7 @@ import {
   MediaIcon,
   MonitorIcon,
   MoonIcon,
+  PlaneIcon,
   RefreshIcon,
   SunIcon,
   TrashIcon,
@@ -41,6 +42,10 @@ const NAV = [
   {
     section: "Create",
     items: [{ label: "Instagram Export", short: "Instagram", href: "/instagram", icon: InstagramIcon, tab: true }],
+  },
+  {
+    section: "Plan",
+    items: [{ label: "Trip Planner", short: "Trips", href: "/trips", icon: PlaneIcon, tab: true }],
   },
   {
     section: "Tools",
@@ -354,7 +359,7 @@ export default function AppShell({ children }) {
 
           {/* Phone bottom tab bar */}
           <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-zinc-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
-            <ul className="relative mx-auto grid max-w-md grid-cols-3">
+            <ul className="relative mx-auto grid max-w-md" style={{ gridTemplateColumns: `repeat(${TABS.length + 1}, minmax(0, 1fr))` }}>
               {/* One highlight that glides to the active tab. */}
               <span
                 aria-hidden="true"

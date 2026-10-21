@@ -204,7 +204,17 @@ export default function MediaLibrary() {
   const { enqueue } = uploader;
 
   useEffect(() => {
-    const first = setTimeout(() => setInterrupted(readPendingUploads()), 0);
+    const first = setTimeout(() => {
+      setInterrupted(readPendingUploads());
+      // Another page asked to open a folder here (Trips -> "Open trip photos").
+      try {
+        const want = sessionStorage.getItem("ps.openDir");
+        if (want) {
+          sessionStorage.removeItem("ps.openDir");
+          setDir(want);
+        }
+      } catch {}
+    }, 0);
     return () => clearTimeout(first);
   }, []);
 

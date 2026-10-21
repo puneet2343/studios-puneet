@@ -196,3 +196,52 @@ export const ArchiveIcon = make(
     <path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4" />
   </>
 );
+export const PlaneIcon = make(<path d="M10.5 13.5 4 12l1-2 6 .5L15.5 5c1-1 2.6-1.2 3.3-.5s.5 2.3-.5 3.3l-5.3 4.5.5 6-2 1-1.5-6.5-3.5 3V17l-2.5 1.5L4 18l1.5-1.5 2-2.5" />);
+export const TrainIcon = make(
+  <>
+    <rect x="5" y="3.5" width="14" height="13" rx="3" />
+    <path d="M5 11h14M9 20l-2 1.5M15 20l2 1.5M8.5 14h.01M15.5 14h.01M9 16.5 7.5 20h9L15 16.5" />
+  </>
+);
+export const BusIcon = make(
+  <>
+    <rect x="4" y="3.5" width="16" height="14" rx="3" />
+    <path d="M4 10.5h16M7.5 14h.01M16.5 14h.01M7 17.5v2.5M17 17.5v2.5" />
+  </>
+);
+export const CarIcon = make(<path d="M5 16.5v2M19 16.5v2M3.5 12.5 5.5 7a2 2 0 0 1 1.9-1.5h9.2A2 2 0 0 1 18.5 7l2 5.5M3.5 12.5h17v4h-17zM7 14.5h.01M17 14.5h.01" />);
+export const ShipIcon = make(<path d="M4 15.5 3 19.5c3 1 6 1 9-.5 3 1.5 6 1.5 9 .5l-1-4M5 15l7-3 7 3M8 13V8h8v5M12 5v3" />);
+export const BikeIcon = make(
+  <>
+    <circle cx="6" cy="16" r="3.5" />
+    <circle cx="18" cy="16" r="3.5" />
+    <path d="M6 16 9.5 9h5l3.5 7M9.5 9 12 16h3.5M13 6h3" />
+  </>
+);
+export const BedIcon = make(<path d="M3 18.5V7M3 15h18v3.5M21 15v-3.5a3 3 0 0 0-3-3h-7v6.5M7 11.5h.01" />);
+export const PinIcon = make(
+  <>
+    <path d="M12 21s-6.5-5.5-6.5-11a6.5 6.5 0 1 1 13 0c0 5.5-6.5 11-6.5 11z" />
+    <circle cx="12" cy="10" r="2.3" />
+  </>
+);
+export const FoodIcon = make(<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1-3.5 3.5-3.5 7v3H17" />);
+export const NoteIcon = make(<path d="M6 3.5h9l4 4V20a.5.5 0 0 1-.5.5h-12A.5.5 0 0 1 6 20zM14.5 3.5V8H19M9 12h6M9 15.5h4" />);
+export const WalletIcon = make(<path d="M4 7.5V18a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1v-3M4 7.5A2.5 2.5 0 0 1 6.5 5H17v2.5M4 7.5h15a1 1 0 0 1 1 1V11M20 11h-4a2.5 2.5 0 0 0 0 5h4z" />);
+export const TicketIcon = make(<path d="M3.5 8.5V6.5A1.5 1.5 0 0 1 5 5h14a1.5 1.5 0 0 1 1.5 1.5v2a3.5 3.5 0 0 0 0 7v2A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5v-2a3.5 3.5 0 0 0 0-7zM14 5v2M14 11v2M14 17v2" />);
+export const ClipIcon = make(<path d="m20 11.5-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4L15 7" />);
+export const PlusIcon = make(<path d="M12 5v14M5 12h14" />);
+export const UsersIcon = make(
+  <>
+    <circle cx="9" cy="8.5" r="3.3" />
+    <path d="M3 19.5a6 6 0 0 1 12 0M16 5.5a3.3 3.3 0 0 1 0 6.2M18 19.5a6 6 0 0 0-2.5-4.9" />
+  </>
+);
+export const ChecklistIcon = make(<path d="m4 7 2 2 3.5-3.5M4 15l2 2 3.5-3.5M12.5 8h7.5M12.5 16h7.5" />);
+export const ClockIcon = make(
+  <>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </>
+);
+export const MapIcon = make(<path d="m9 4.5-5 2v13l5-2 6 2 5-2v-13l-5 2zM9 4.5v13M15 6.5v13" />);
