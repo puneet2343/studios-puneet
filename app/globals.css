@@ -1,8 +1,68 @@
 @import "tailwindcss";
 
+/*
+  Theming: components use Tailwind's zinc/white palette as written for dark mode.
+  Light mode re-maps those palette variables (zinc scale reversed, white <-> black)
+  so every component flips without per-component classes. An element can opt back
+  into dark with data-theme="dark" (the media viewer always does).
+*/
+:root,
+[data-theme="dark"] {
+  --background: #09090b;
+  --foreground: #ededed;
+  --skeleton-a: rgb(255 255 255 / 0.03);
+  --skeleton-b: rgb(255 255 255 / 0.07);
+  --color-white: #fff;
+  --color-zinc-50: oklch(0.985 0 0);
+  --color-zinc-100: oklch(0.967 0.001 286.375);
+  --color-zinc-200: oklch(0.92 0.004 286.32);
+  --color-zinc-300: oklch(0.871 0.006 286.286);
+  --color-zinc-400: oklch(0.705 0.015 286.067);
+  --color-zinc-500: oklch(0.552 0.016 285.938);
+  --color-zinc-600: oklch(0.442 0.017 285.786);
+  --color-zinc-700: oklch(0.37 0.013 285.805);
+  --color-zinc-800: oklch(0.274 0.006 286.033);
+  --color-zinc-900: oklch(0.21 0.006 285.885);
+  --color-zinc-950: oklch(0.141 0.005 285.823);
+  --color-violet-300: oklch(0.811 0.111 293.571);
+  --color-sky-300: oklch(0.828 0.111 230.318);
+  --color-red-300: oklch(0.808 0.114 19.571);
+  --color-red-400: oklch(0.704 0.191 22.216);
+  --color-amber-200: oklch(0.924 0.12 95.746);
+  --color-emerald-300: oklch(0.845 0.143 164.978);
+  --color-pink-300: oklch(0.823 0.12 346.018);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --background: #fbfbfc;
+  --foreground: #18181b;
+  --skeleton-a: rgb(0 0 0 / 0.04);
+  --skeleton-b: rgb(0 0 0 / 0.08);
+  --color-white: #000;
+  --color-zinc-50: oklch(0.141 0.005 285.823);
+  --color-zinc-100: oklch(0.21 0.006 285.885);
+  --color-zinc-200: oklch(0.274 0.006 286.033);
+  --color-zinc-300: oklch(0.37 0.013 285.805);
+  --color-zinc-400: oklch(0.442 0.017 285.786);
+  --color-zinc-500: oklch(0.552 0.016 285.938);
+  --color-zinc-600: oklch(0.705 0.015 286.067);
+  --color-zinc-700: oklch(0.871 0.006 286.286);
+  --color-zinc-800: oklch(0.92 0.004 286.32);
+  --color-zinc-900: oklch(0.967 0.001 286.375);
+  --color-zinc-950: oklch(0.99 0 0);
+  --color-violet-300: oklch(0.541 0.281 293.009);
+  --color-sky-300: oklch(0.588 0.158 241.966);
+  --color-red-300: oklch(0.577 0.245 27.325);
+  --color-red-400: oklch(0.577 0.245 27.325);
+  --color-amber-200: oklch(0.473 0.137 46.201);
+  --color-emerald-300: oklch(0.527 0.154 150.069);
+  --color-pink-300: oklch(0.592 0.249 0.584);
+  color-scheme: light;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @theme inline {
@@ -12,15 +72,90 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 200ms var(--ease-out);
+}
+
+::selection {
+  background: rgb(139 92 246 / 0.35);
+}
+
+/* Motion: short, eased, no bounce. Disabled entirely for reduced-motion users. */
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.97); }
+}
+@keyframes drawer {
+  from { transform: translateX(-100%); }
+}
+@keyframes sheet {
+  from { opacity: 0; transform: translateY(16px); }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.anim-fade { animation: fade-in 180ms var(--ease-out) both; }
+.anim-rise { animation: rise 240ms var(--ease-out) both; }
+.anim-pop { animation: pop 220ms var(--ease-out) both; }
+.anim-drawer { animation: drawer 240ms var(--ease-out) both; }
+.anim-sheet { animation: sheet 260ms var(--ease-out) both; }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 50%, var(--skeleton-a) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Lets the browser skip layout/paint for date sections that are off screen. */
+.lazy-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
+
+/* Viewer: the next photo slides in from the side it was swiped towards. */
+@keyframes from-right {
+  from { opacity: 0; transform: translateX(48px); }
+}
+@keyframes from-left {
+  from { opacity: 0; transform: translateX(-48px); }
+}
+.anim-from-right { animation: from-right 240ms var(--ease-out) both; }
+.anim-from-left { animation: from-left 240ms var(--ease-out) both; }
+
+/* Opening screens: the logo settles in, the glow drifts slowly, the bar sweeps. */
+@keyframes logo-in {
+  from { opacity: 0; transform: scale(0.86); filter: blur(4px); }
+}
+@keyframes drift {
+  50% { transform: translate(-46%, -54%) scale(1.08); }
+}
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.anim-logo { animation: logo-in 520ms var(--ease-out) both; }
+.glow-drift { animation: drift 9s ease-in-out infinite; }
+.glow-drift-alt { animation: drift 12s ease-in-out infinite reverse; }
+.progress-sweep { animation: sweep 1.3s var(--ease-out) infinite; }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }

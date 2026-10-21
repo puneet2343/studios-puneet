@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# auto-start logs
+/scripts/*.log
+
+# chat history exports (may contain private details)
+/history/
