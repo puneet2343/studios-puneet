@@ -88,27 +88,38 @@ function useAuthHint() {
 // reloads it straight away; if the app is open at the time, a banner offers the update.
 // Uploads and trims in progress hold the reload off (window.__psBusy).
 // Also returns when the running version was built, shown under the app name.
+// The version this copy of the app is (baked in when it was built), not what the PC
+// says, so an old copy loaded from the phone's cache is still recognised as old.
+const MY_BUILD = process.env.NEXT_PUBLIC_BUILD_ID;
+const MY_BUILT_AT = Number(process.env.NEXT_PUBLIC_BUILT_AT) || null;
+const RELOADS_KEY = "ps.update.reloads";
+
+// Reload, but never more than twice a minute (in case the PC keeps sending an old copy).
+function reloadForUpdate() {
+  try {
+    const recent = JSON.parse(sessionStorage.getItem(RELOADS_KEY) || "[]").filter((t) => Date.now() - t < 60000);
+    if (recent.length >= 2) return false;
+    sessionStorage.setItem(RELOADS_KEY, JSON.stringify([...recent, Date.now()]));
+  } catch {}
+  window.location.reload();
+  return true;
+}
+
 function useAutoUpdate() {
   const [ready, setReady] = useState(false);
-  const [builtAt, setBuiltAt] = useState(null);
   useEffect(() => {
-    let loaded = null;
     const idle = () => !(window.__psBusy > 0);
-    async function check(resumed) {
+    // `fresh`: the app was just opened or brought back, so refreshing won't interrupt anything.
+    async function check(fresh) {
       const info = await fetch("/api/version", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
-      const build = info?.build;
-      if (!build) return;
-      if (!loaded) {
-        loaded = build;
-        setBuiltAt(info.builtAt);
-      } else if (build !== loaded) {
-        if (resumed && idle()) window.location.reload();
-        else setReady(true);
-      }
+      if (!info?.build || !MY_BUILD || info.build === MY_BUILD) return;
+      // Out of date: refresh now if nothing's going on, otherwise offer it.
+      if (fresh && idle() && reloadForUpdate()) return;
+      setReady(true);
     }
-    check(false);
+    check(true);
     const timer = setInterval(() => document.visibilityState === "visible" && check(false), 30000);
     const onVisible = () => document.visibilityState === "visible" && check(true);
     document.addEventListener("visibilitychange", onVisible);
@@ -117,7 +128,7 @@ function useAutoUpdate() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
-  return { ready, builtAt };
+  return { ready, builtAt: MY_BUILT_AT };
 }
 
 // Phone top bar: tucks away while scrolling down through media, comes back on the
