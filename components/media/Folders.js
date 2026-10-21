@@ -256,7 +256,9 @@ export function ConfirmDialog({ title, message, action, onClose, onConfirm }) {
 
 // Folder picker for "Move to…". `moving` lists the paths being moved, so a folder
 // can't be dropped into itself and the folder they're already in can't be chosen.
-export function MoveDialog({ moving, from, onClose, onMove }) {
+// With `pick` it's a plain folder chooser instead ("Save audio in…"): any folder can be
+// chosen, including the one it opens in. `title` and `action` replace the Move wording.
+export function MoveDialog({ moving, from, onClose, onMove, pick = false, title, action }) {
   useBackClose(true, onClose);
   const [dir, setDir] = useState(from);
   const [folders, setFolders] = useState(null);
@@ -275,11 +277,11 @@ export function MoveDialog({ moving, from, onClose, onMove }) {
 
   const blocked = (path) => moving.some((m) => path === m || path.startsWith(`${m}/`));
   const choices = (folders ?? []).filter((f) => !blocked(f.path));
-  const canMove = dir !== from && !blocked(dir);
+  const canMove = (pick || dir !== from) && !blocked(dir);
 
   return (
     <Dialog
-      title={moving.length === 1 ? `Move "${baseOf(moving[0])}"` : `Move ${moving.length} items`}
+      title={title ?? (moving.length === 1 ? `Move "${baseOf(moving[0])}"` : `Move ${moving.length} items`)}
       onClose={onClose}
       footer={
         <>
@@ -292,7 +294,7 @@ export function MoveDialog({ moving, from, onClose, onMove }) {
               await onMove(dir);
             }}
           >
-            {busy ? "Moving…" : "Move here"}
+            {busy ? (pick ? "Saving…" : "Moving…") : action ?? "Move here"}
           </Button>
         </>
       }
@@ -313,7 +315,7 @@ export function MoveDialog({ moving, from, onClose, onMove }) {
             ))}
           </div>
         ) : choices.length === 0 ? (
-          <p className="px-2 py-6 text-center text-sm text-zinc-500">No folders here. Tap Move here to put it in this folder.</p>
+          <p className="px-2 py-6 text-center text-sm text-zinc-500">No folders here. Tap {action ?? "Move here"} to use this folder.</p>
         ) : (
           choices.map((f) => (
             <button
@@ -328,7 +330,7 @@ export function MoveDialog({ moving, from, onClose, onMove }) {
           ))
         )}
       </div>
-      {dir === from && <p className="mt-2 text-xs text-zinc-500">Open a folder above, then tap Move here.</p>}
+      {dir === from && !pick && <p className="mt-2 text-xs text-zinc-500">Open a folder above, then tap Move here.</p>}
     </Dialog>
   );
 }

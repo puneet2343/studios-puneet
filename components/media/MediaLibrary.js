@@ -27,6 +27,7 @@ import MediaTile from "@/components/media/MediaTile";
 import UploadPanel from "@/components/media/UploadPanel";
 import TrimEditor from "@/components/media/TrimEditor";
 import RotateEditor from "@/components/media/RotateEditor";
+import ExtractAudioDialog from "@/components/media/ExtractAudioDialog";
 import { TripSuggestions, dismissTrip, readDismissed } from "@/components/media/Trips";
 import Viewer from "@/components/media/Viewer";
 import useUploader from "@/components/media/useUploader";
@@ -91,6 +92,7 @@ export default function MediaLibrary() {
   const [moving, setMoving] = useState(null); // paths being moved
   const [trimming, setTrimming] = useState(null); // video file open in the trim editor
   const [rotating, setRotating] = useState(null); // video file open in the rotate editor
+  const [audioFor, setAudioFor] = useState(null); // video whose sound is being saved
   const [now, setNow] = useState(0);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -518,21 +520,15 @@ export default function MediaLibrary() {
     });
   }
 
-  // Saves the video's sound next to it, untouched (no re-encoding).
-  async function extractAudio(file) {
-    toast("Extracting the sound…", { duration: 20000 });
-    const res = await fetch("/api/audio", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.path }),
-    }).catch(() => null);
-    const data = res ? await readJson(res) : { error: "Can't reach the studio PC." };
-    if (!res?.ok) return toast(data.error || "Couldn't extract the sound", { duration: 8000 });
+  // The sound was saved (ExtractAudioDialog): say where, offer it for download.
+  async function audioSaved(path) {
+    setAudioFor(null);
     haptic("success");
     await refreshAll();
-    toast(`Saved "${baseOf(data.path)}" in original quality`, {
+    const folder = path.includes("/") ? path.split("/").slice(0, -1).join(" › ") : "Media";
+    toast(`Saved "${baseOf(path)}" in ${folder}`, {
       duration: 8000,
-      action: { label: "Download", onClick: () => (window.location.href = downloadUrl({ path: data.path })) },
+      action: { label: "Download", onClick: () => (window.location.href = downloadUrl({ path })) },
     });
   }
 
@@ -852,10 +848,12 @@ export default function MediaLibrary() {
           onDelete={remove}
           onTrim={setTrimming}
           onRotate={setRotating}
-          onExtractAudio={extractAudio}
+          onExtractAudio={setAudioFor}
           onFavorite={setFavorite}
         />
       )}
+
+      {audioFor && <ExtractAudioDialog file={audioFor} onClose={() => setAudioFor(null)} onSaved={audioSaved} />}
 
       {rotating && (
         <RotateEditor
