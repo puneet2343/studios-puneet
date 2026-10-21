@@ -74,19 +74,23 @@ function useAuthHint() {
 // This notices when the studio PC is running a newer build: coming back to the app
 // reloads it straight away; if the app is open at the time, a banner offers the update.
 // Uploads and trims in progress hold the reload off (window.__psBusy).
+// Also returns when the running version was built, shown under the app name.
 function useAutoUpdate() {
   const [ready, setReady] = useState(false);
+  const [builtAt, setBuiltAt] = useState(null);
   useEffect(() => {
     let loaded = null;
     const idle = () => !(window.__psBusy > 0);
     async function check(resumed) {
-      const build = await fetch("/api/version", { cache: "no-store" })
+      const info = await fetch("/api/version", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => d?.build)
         .catch(() => null);
+      const build = info?.build;
       if (!build) return;
-      if (!loaded) loaded = build;
-      else if (build !== loaded) {
+      if (!loaded) {
+        loaded = build;
+        setBuiltAt(info.builtAt);
+      } else if (build !== loaded) {
         if (resumed && idle()) window.location.reload();
         else setReady(true);
       }
@@ -100,7 +104,16 @@ function useAutoUpdate() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
-  return ready;
+  return { ready, builtAt };
+}
+
+// "Tue, 21 Oct · 11:14 am": when the running version was built.
+function versionLabel(builtAt) {
+  if (!builtAt) return null;
+  const d = new Date(builtAt);
+  const day = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${day} · ${time}`;
 }
 
 function setAuthHint(on) {
@@ -114,7 +127,8 @@ export default function AppShell({ children }) {
   const [authed, setAuthed] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storage, setStorage] = useState(null);
-  const updateReady = useAutoUpdate();
+  const { ready: updateReady, builtAt } = useAutoUpdate();
+  const version = versionLabel(builtAt);
   const pathname = usePathname();
   const hint = useAuthHint();
   useBackClose(settingsOpen, () => setSettingsOpen(false));
@@ -191,7 +205,7 @@ export default function AppShell({ children }) {
                 <Logo size={34} />
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-semibold tracking-tight text-zinc-100">Puneet Studios</p>
-                  <p className="text-xs text-zinc-500">Creator workspace</p>
+                  <p className="truncate text-xs tabular-nums text-zinc-500">{version ? `Version · ${version}` : "Creator workspace"}</p>
                 </div>
               </div>
               <div className="flex-1 space-y-7 overflow-y-auto px-3">
@@ -244,8 +258,14 @@ export default function AppShell({ children }) {
           <div className="flex min-w-0 flex-1 flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0">
             {/* Phone top bar: just where you are. Navigation lives in the bottom tabs. */}
             <div className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/[0.06] bg-zinc-950/85 px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-xl lg:hidden">
-              <Logo size={26} />
-              <span className="text-[15px] font-semibold tracking-tight text-zinc-100">{current?.label ?? "Puneet Studios"}</span>
+              <Logo size={32} />
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="truncate text-[15px] font-semibold tracking-tight text-zinc-100">Puneet Studios</p>
+                <p className={`truncate text-[11px] tabular-nums text-zinc-500 transition-opacity duration-300 ${version ? "opacity-100" : "opacity-0"}`}>
+                  Version · {version ?? "…"}
+                </p>
+              </div>
+              {current && <span className="shrink-0 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-zinc-300">{current.short ?? current.label}</span>}
             </div>
 
             <div key={pathname} className="anim-fade flex flex-1 flex-col">
@@ -310,6 +330,7 @@ export default function AppShell({ children }) {
                   <div>
                     <p className="font-semibold text-zinc-100">Puneet Studios</p>
                     <p className="text-xs text-zinc-500">Signed in · studio PC</p>
+                    {version && <p className="text-xs tabular-nums text-zinc-500">Version · {version}</p>}
                   </div>
                 </div>
                 <p className="mb-2 px-1 text-xs font-medium uppercase tracking-[0.06em] text-zinc-500">Appearance</p>
