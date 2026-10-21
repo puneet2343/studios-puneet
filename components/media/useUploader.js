@@ -9,6 +9,31 @@ const PARALLEL = 2;
 const CHUNK = 8 * 1024 * 1024; // pieces of a resumable upload
 const MAX_WAIT_S = 30;
 
+const PENDING_KEY = "ps.uploads.pending";
+
+// Unfinished resumable uploads, remembered on the phone: if Android closes the app
+// mid-upload, the Media page can list them and resume them in the right folder.
+export function readPendingUploads() {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+export function forgetPendingUploads(paths) {
+  try {
+    const keep = paths ? readPendingUploads().filter((p) => !paths.includes(p.path)) : [];
+    localStorage.setItem(PENDING_KEY, JSON.stringify(keep));
+  } catch {}
+}
+function rememberPending(list) {
+  try {
+    const byPath = new Map(readPendingUploads().map((p) => [p.path, p]));
+    for (const p of list) byPath.set(p.path, p);
+    localStorage.setItem(PENDING_KEY, JSON.stringify([...byPath.values()].slice(-50)));
+  } catch {}
+}
+
 class Cancelled extends Error {}
 class Offline extends Error {}
 
@@ -120,7 +145,10 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl, pathFor =
             // Ask the PC how much it already has (0 for a new upload).
             const res = await send(ctrl, "POST", "/api/upload", JSON.stringify({ id, name: item.path, size: file.size }));
             if (res.status >= 500 && res.status !== 507) throw new Offline();
-            if (res.status !== 200) return update(item.id, { status: "error", error: res.body.error || `Failed (${res.status})`, note: null });
+            if (res.status !== 200) {
+              forgetPendingUploads([item.path]);
+              return update(item.id, { status: "error", error: res.body.error || `Failed (${res.status})`, note: null });
+            }
             offset = res.body.offset;
             update(item.id, {
               loaded: offset,
@@ -142,6 +170,7 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl, pathFor =
           if (attempt) update(item.id, { note: null });
           attempt = 0;
           if (res.body.done) {
+            forgetPendingUploads([item.path]);
             update(item.id, { status: "done", loaded: file.size, savedAs: res.body.name, note: null });
             onUploadedRef.current?.(res.body, file);
             return;
@@ -169,6 +198,7 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl, pathFor =
       const run = item.path ? runResumable(item, ctrl) : runSimple(item, ctrl);
       run
         .catch((error) => {
+          if (item.path) forgetPendingUploads([item.path]);
           if (error instanceof Cancelled) update(item.id, { status: "cancelled", note: null });
           else update(item.id, { status: "error", error: error instanceof Offline ? "Connection lost" : error.message, note: null });
         })
@@ -179,18 +209,24 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl, pathFor =
     }
   }, [runResumable, runSimple, update]);
 
+  // `pathOverride(file)` can send a file to a specific place (resuming into its original folder).
   const enqueue = useCallback(
-    (fileList) => {
+    (fileList, pathOverride) => {
       const files = Array.from(fileList ?? []);
       if (!files.length) return;
-      const added = files.map((file) => ({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        file,
-        // Fixed when queued, so switching folders mid-upload doesn't redirect it.
-        ...(pathForRef.current ? { path: pathForRef.current(file) } : { url: urlForRef.current(file) }),
-        loaded: 0,
-        status: "waiting",
-      }));
+      const added = files.map((file) => {
+        const target = pathOverride?.(file) ?? pathForRef.current?.(file);
+        return {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          file,
+          // Fixed when queued, so switching folders mid-upload doesn't redirect it.
+          ...(target ? { path: target } : { url: urlForRef.current(file) }),
+          loaded: 0,
+          status: "waiting",
+        };
+      });
+      const resumable = added.filter((it) => it.path);
+      if (resumable.length) rememberPending(resumable.map((it) => ({ path: it.path, name: it.file.name, size: it.file.size })));
       queue.current.push(...added);
       setItems((list) => [...list, ...added]);
       pump();
@@ -220,6 +256,16 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl, pathFor =
   );
 
   const active = items.some((it) => it.status === "uploading" || it.status === "waiting");
+
+  // Back in the app (or back online): retry paused uploads now instead of waiting out the timer.
+  useEffect(() => {
+    if (!active) return;
+    const wakeAll = () => {
+      if (document.visibilityState === "visible") for (const ctrl of running.current.values()) ctrl.wake?.();
+    };
+    document.addEventListener("visibilitychange", wakeAll);
+    return () => document.removeEventListener("visibilitychange", wakeAll);
+  }, [active]);
 
   // Smoothed transfer speed, sampled once a second while anything is uploading.
   useEffect(() => {

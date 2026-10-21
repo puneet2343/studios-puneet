@@ -30,7 +30,7 @@ import RotateEditor from "@/components/media/RotateEditor";
 import ExtractAudioDialog from "@/components/media/ExtractAudioDialog";
 import { TripSuggestions, dismissTrip, readDismissed } from "@/components/media/Trips";
 import Viewer from "@/components/media/Viewer";
-import useUploader from "@/components/media/useUploader";
+import useUploader, { forgetPendingUploads, readPendingUploads } from "@/components/media/useUploader";
 import useBackClose from "@/components/useBackClose";
 import { actionUrl, downloadUrl, joinPath, zipFilesUrl } from "@/components/media/urls";
 import {
@@ -107,6 +107,9 @@ export default function MediaLibrary() {
   const [renaming, setRenaming] = useState(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
+  const resumeInputRef = useRef(null);
+  // Uploads cut short last time (Android closed the app): offered again on the Media page.
+  const [interrupted, setInterrupted] = useState([]);
   const hidden = useRef(new Set()); // paths deleted optimistically, until the server agrees
   const metaRetry = useRef(null);
   const metaRetries = useRef(0); // capped: files that can't be thumbnailed never get metadata
@@ -199,6 +202,24 @@ export default function MediaLibrary() {
   useBackClose(query.trim() !== "", () => setQuery(""));
   useBackClose(filter !== "all", () => setFilter("all"));
   const { enqueue } = uploader;
+
+  useEffect(() => {
+    const first = setTimeout(() => setInterrupted(readPendingUploads()), 0);
+    return () => clearTimeout(first);
+  }, []);
+
+  // Re-picked files go back to the folder they were heading for and continue from the
+  // last piece the PC has (same file -> same upload id).
+  function resumeInterrupted(list) {
+    const picked = Array.from(list ?? []);
+    if (!picked.length) return;
+    const byFile = new Map(interrupted.map((p) => [`${p.name}|${p.size}`, p.path]));
+    enqueue(picked, (file) => byFile.get(`${file.name}|${file.size}`));
+    const matched = picked.map((f) => byFile.get(`${f.name}|${f.size}`)).filter(Boolean);
+    setInterrupted((left) => left.filter((p) => !matched.includes(p.path)));
+    haptic("tap");
+    toast(matched.length ? `Resuming ${matched.length} upload${matched.length === 1 ? "" : "s"} from where they stopped` : "Uploading");
+  }
 
   // Check the picked files fit on the PC before spending time uploading them.
   const addFiles = useCallback(
@@ -746,6 +767,45 @@ export default function MediaLibrary() {
       </header>
 
       <StorageBanner disk={disk} />
+
+      {interrupted.length > 0 && (
+        <div role="status" className="anim-fade mx-4 mb-4 rounded-2xl border border-sky-400/25 bg-sky-400/[0.07] px-4 py-3 sm:mx-6">
+          <p className="text-sm font-semibold text-sky-300">
+            {interrupted.length === 1 ? "1 upload didn't finish" : `${interrupted.length} uploads didn't finish`}
+          </p>
+          <p className="mt-0.5 text-sm text-zinc-400">
+            {interrupted.slice(0, 3).map((p) => p.name).join(", ")}
+            {interrupted.length > 3 ? ` and ${interrupted.length - 3} more` : ""}. Pick them again and they&apos;ll continue from where they stopped.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button variant="primary" onClick={() => resumeInputRef.current?.click()} className="h-10">
+              <UploadIcon size={16} />
+              Pick them again
+            </Button>
+            <Button
+              onClick={() => {
+                forgetPendingUploads();
+                setInterrupted([]);
+              }}
+              className="h-10"
+            >
+              Not now
+            </Button>
+          </div>
+          <input
+            ref={resumeInputRef}
+            aria-label="Pick unfinished uploads"
+            type="file"
+            multiple
+            accept="video/*,image/*,audio/*"
+            className="hidden"
+            onChange={(e) => {
+              resumeInterrupted(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      )}
 
       {error && (
         <p className="anim-fade mx-4 mb-4 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-2.5 text-sm text-amber-200 sm:mx-6">
