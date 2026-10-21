@@ -19,6 +19,7 @@ import {
 } from "@/components/icons";
 import MediaTile from "@/components/media/MediaTile";
 import UploadPanel from "@/components/media/UploadPanel";
+import TrimEditor from "@/components/media/TrimEditor";
 import Viewer from "@/components/media/Viewer";
 import useUploader from "@/components/media/useUploader";
 import useBackClose from "@/components/useBackClose";
@@ -78,6 +79,7 @@ export default function MediaLibrary() {
   const [naming, setNaming] = useState(null); // { folder } to rename one, {} for a new folder
   const [deleting, setDeleting] = useState(null);
   const [moving, setMoving] = useState(null); // paths being moved
+  const [trimming, setTrimming] = useState(null); // video file open in the trim editor
   const [now, setNow] = useState(0);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -617,7 +619,7 @@ export default function MediaLibrary() {
         onClear={uploader.clearFinished}
       />
 
-      {openFile && (
+      {openFile && !trimming && (
         <Viewer
           file={openFile}
           prev={visible[openIndex - 1] ?? null}
@@ -626,6 +628,22 @@ export default function MediaLibrary() {
           onNavigate={setOpenName}
           onRename={setRenaming}
           onDelete={remove}
+          onTrim={setTrimming}
+        />
+      )}
+
+      {trimming && (
+        <TrimEditor
+          file={trimming}
+          onClose={() => setTrimming(null)}
+          onSaved={async ({ path, replaced }) => {
+            setTrimming(null);
+            await load();
+            setOpenName(baseOf(path));
+            toast(replaced ? "Trimmed. The original is in the PC recycle folder for 3 days." : `Saved "${baseOf(path)}"`, {
+              duration: replaced ? 7000 : 5000,
+            });
+          }}
         />
       )}
 

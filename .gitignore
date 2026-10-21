@@ -45,3 +45,5 @@ next-env.d.ts
 
 # chat history exports (may contain private details)
 /history/
+/.next-b/
+/.next-build/

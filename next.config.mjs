@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // scripts/serve.js builds into a side folder, then swaps it in, so a failed build never
+  // takes the running app down.
+  distDir: process.env.PS_DIST_DIR || ".next",
   /* config options here */
   experimental: {
     agentFeedback: true,

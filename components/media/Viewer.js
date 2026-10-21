@@ -10,6 +10,7 @@ import {
   FileIcon,
   InfoIcon,
   PencilIcon,
+  ScissorsIcon,
   TrashIcon,
 } from "@/components/icons";
 import VideoPlayer from "@/components/media/VideoPlayer";
@@ -84,7 +85,7 @@ function Stage({ file, onControls }) {
   );
 }
 
-export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete }) {
+export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim }) {
   const [showInfo, setShowInfo] = useState(false);
   const [chrome, setChrome] = useState(true); // tap the photo to hide/show controls
   const [drag, setDrag] = useState(null); // { dx, dy } while a finger is down
@@ -199,6 +200,11 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
         <IconButton label="Info" onClick={() => setShowInfo((v) => !v)}>
           <InfoIcon size={19} />
         </IconButton>
+        {file.kind === "video" && onTrim && (
+          <IconButton label="Trim" onClick={() => onTrim(file)}>
+            <ScissorsIcon size={19} />
+          </IconButton>
+        )}
         <IconButton label="Rename" onClick={() => onRename(file)}>
           <PencilIcon size={18} />
         </IconButton>

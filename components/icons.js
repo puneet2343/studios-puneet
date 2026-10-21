@@ -168,3 +168,10 @@ export const MuteIcon = make(<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16.5 9.5l5 
 export const ExpandIcon = make(<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />);
 export const ShrinkIcon = make(<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />);
 export const SpeedIcon = make(<path d="M4.5 16.5a8 8 0 1 1 15 0M12 12.5l3.5-3.5M12 13.5h.01" />);
+export const ScissorsIcon = make(
+  <>
+    <circle cx="6.5" cy="6.5" r="2.8" />
+    <circle cx="6.5" cy="17.5" r="2.8" />
+    <path d="M8.8 8.2 20 18M8.8 15.8 20 6" />
+  </>
+);

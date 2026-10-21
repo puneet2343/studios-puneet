@@ -124,7 +124,12 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl }) {
     if (!active) return;
     const warn = (e) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    // Also holds off the automatic app update until uploads finish (see AppShell).
+    window.__psBusy = (window.__psBusy || 0) + 1;
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      window.__psBusy -= 1;
+    };
   }, [active]);
 
   return { items, speed, active, enqueue, cancel, clearFinished };

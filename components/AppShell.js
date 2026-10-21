@@ -70,6 +70,39 @@ function useAuthHint() {
     () => false
   );
 }
+// Installed phone apps stay paused in memory, so reopening them shows the old version.
+// This notices when the studio PC is running a newer build: coming back to the app
+// reloads it straight away; if the app is open at the time, a banner offers the update.
+// Uploads and trims in progress hold the reload off (window.__psBusy).
+function useAutoUpdate() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let loaded = null;
+    const idle = () => !(window.__psBusy > 0);
+    async function check(resumed) {
+      const build = await fetch("/api/version", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d?.build)
+        .catch(() => null);
+      if (!build) return;
+      if (!loaded) loaded = build;
+      else if (build !== loaded) {
+        if (resumed && idle()) window.location.reload();
+        else setReady(true);
+      }
+    }
+    check(false);
+    const timer = setInterval(() => document.visibilityState === "visible" && check(false), 30000);
+    const onVisible = () => document.visibilityState === "visible" && check(true);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+  return ready;
+}
+
 function setAuthHint(on) {
   try {
     if (on) localStorage.setItem(AUTH_HINT, "1");
@@ -81,6 +114,7 @@ export default function AppShell({ children }) {
   const [authed, setAuthed] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storage, setStorage] = useState(null);
+  const updateReady = useAutoUpdate();
   const pathname = usePathname();
   const hint = useAuthHint();
   useBackClose(settingsOpen, () => setSettingsOpen(false));
@@ -217,6 +251,16 @@ export default function AppShell({ children }) {
             <div key={pathname} className="anim-fade flex flex-1 flex-col">
               {children}
             </div>
+
+            {updateReady && (
+              <button
+                onClick={() => window.location.reload()}
+                className="anim-rise fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-[65] flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-violet-500 py-2 pl-3 pr-4 text-sm font-medium text-[#fff] shadow-xl shadow-violet-900/30 active:scale-95"
+              >
+                <RefreshIcon size={15} />
+                New version ready · Tap to update
+              </button>
+            )}
           </div>
 
           {/* Phone bottom tab bar */}
