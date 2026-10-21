@@ -517,6 +517,24 @@ export default function MediaLibrary() {
     });
   }
 
+  // Saves the video's sound next to it, untouched (no re-encoding).
+  async function extractAudio(file) {
+    toast("Extracting the sound…", { duration: 20000 });
+    const res = await fetch("/api/audio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.path }),
+    }).catch(() => null);
+    const data = res ? await readJson(res) : { error: "Can't reach the studio PC." };
+    if (!res?.ok) return toast(data.error || "Couldn't extract the sound", { duration: 8000 });
+    haptic("success");
+    await refreshAll();
+    toast(`Saved "${baseOf(data.path)}" in original quality`, {
+      duration: 8000,
+      action: { label: "Download", onClick: () => (window.location.href = downloadUrl({ path: data.path })) },
+    });
+  }
+
   function downloadSelected() {
     const chosen = visible.filter((f) => selected.has(f.path));
     // One file downloads as itself; several come as a single ZIP.
@@ -833,6 +851,7 @@ export default function MediaLibrary() {
           onDelete={remove}
           onTrim={setTrimming}
           onRotate={setRotating}
+          onExtractAudio={extractAudio}
           onFavorite={setFavorite}
         />
       )}

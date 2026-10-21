@@ -10,6 +10,7 @@ import {
   DownloadIcon,
   FileIcon,
   InfoIcon,
+  MusicIcon,
   PencilIcon,
   RotateRightIcon,
   ScissorsIcon,
@@ -89,7 +90,7 @@ function Stage({ file, onControls, onTap }) {
   );
 }
 
-export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onFavorite }) {
+export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onExtractAudio, onFavorite }) {
   const [showInfo, setShowInfo] = useState(false);
   const [more, setMore] = useState(false);
   const [chrome, setChrome] = useState(true); // tap the photo to hide/show controls
@@ -229,6 +230,11 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
               <RotateRightIcon size={19} />
             </IconButton>
           )}
+          {file.kind === "video" && onExtractAudio && (
+            <IconButton label="Extract audio" onClick={() => onExtractAudio(file)}>
+              <MusicIcon size={19} />
+            </IconButton>
+          )}
           <IconButton label="Rename" onClick={() => onRename(file)}>
             <PencilIcon size={18} />
           </IconButton>
@@ -249,6 +255,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
               {[
                 { label: "Properties", icon: InfoIcon, run: () => setShowInfo(true) },
                 ...(file.kind === "video" && onRotate ? [{ label: "Rotate / mirror", icon: RotateRightIcon, run: () => onRotate(file) }] : []),
+                ...(file.kind === "video" && onExtractAudio ? [{ label: "Extract audio", icon: MusicIcon, run: () => onExtractAudio(file) }] : []),
                 { label: "Rename", icon: PencilIcon, run: () => onRename(file) },
               ].map(({ label, icon: Icon, run }) => (
                 <button
