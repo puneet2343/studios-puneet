@@ -1,6 +1,5 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import AppShell from "@/components/AppShell";
-import Logo from "@/components/Logo";
 import { themeBootScript } from "@/lib/theme-boot";
 import "./globals.css";
 
@@ -41,16 +40,6 @@ export default function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body className="min-h-full flex flex-col bg-zinc-950">
-        {/* Opening animation: carries on from Android's launch screen, then fades away.
-            Pure CSS so it plays before any JavaScript loads; it never blocks taps. */}
-        <div aria-hidden="true" className="launch">
-          <div className="launch-glow" />
-          <div className="launch-logo">
-            <Logo size={92} />
-          </div>
-          <p className="launch-name">Puneet Studios</p>
-          <p className="launch-tag">Creator workspace</p>
-        </div>
         <AppShell>{children}</AppShell>
       </body>
     </html>
