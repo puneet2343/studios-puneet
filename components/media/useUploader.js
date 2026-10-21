@@ -6,68 +6,178 @@ import { actionUrl } from "@/components/media/urls";
 const defaultUrl = (file) => actionUrl(file.name);
 
 const PARALLEL = 2;
+const CHUNK = 8 * 1024 * 1024; // pieces of a resumable upload
+const MAX_WAIT_S = 30;
 
-// Uploads files as raw request bodies (streamed to disk on the server), two at a time.
-// XMLHttpRequest is used because fetch can't report upload progress.
-export default function useUploader({ onUploaded, urlFor = defaultUrl }) {
+class Cancelled extends Error {}
+class Offline extends Error {}
+
+// Same file (folder, name, size, date) -> same id, so picking it again later resumes it.
+function uploadId(path, file) {
+  const text = `${path}|${file.size}|${file.lastModified}`;
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < text.length; i++) {
+    a = Math.imul(a ^ text.charCodeAt(i), 0x01000193) >>> 0;
+    b = Math.imul(b ^ text.charCodeAt(i), 0x811c9dc5) >>> 0;
+  }
+  return `u${a.toString(36)}${b.toString(36)}${file.size.toString(36)}`.slice(0, 64);
+}
+
+// Waits `seconds`, or less if the phone comes back online.
+function waitOrOnline(seconds, ctrl) {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", done);
+      ctrl.wake = null;
+      resolve();
+    };
+    const timer = setTimeout(done, seconds * 1000);
+    window.addEventListener("online", done);
+    ctrl.wake = done;
+  });
+}
+
+/**
+ * Uploads files two at a time. XMLHttpRequest is used because fetch can't report
+ * upload progress.
+ *
+ * With `pathFor(file)` (library uploads) each file goes up in 8 MB pieces and the PC
+ * keeps what arrived: a dropped connection is retried automatically and carries on
+ * from the last piece, and picking the same file again later resumes it too.
+ * With only `urlFor(file)` (Instagram Export sources) the file is sent in one go.
+ */
+export default function useUploader({ onUploaded, urlFor = defaultUrl, pathFor = null }) {
   const [items, setItems] = useState([]);
   const [speed, setSpeed] = useState(0);
   const queue = useRef([]);
-  const running = useRef(new Map());
+  const running = useRef(new Map()); // item id -> { xhr, cancelled, wake }
   const loadedBytes = useRef(0);
   const onUploadedRef = useRef(onUploaded);
   const urlForRef = useRef(urlFor);
+  const pathForRef = useRef(pathFor);
 
   useEffect(() => {
     onUploadedRef.current = onUploaded;
     urlForRef.current = urlFor;
-  }, [onUploaded, urlFor]);
+    pathForRef.current = pathFor;
+  }, [onUploaded, urlFor, pathFor]);
 
   const update = useCallback(
     (id, patch) => setItems((list) => list.map((it) => (it.id === id ? { ...it, ...patch } : it))),
     []
   );
 
-  const pump = useCallback(() => {
-    // Named so each finished upload can start the next one in the queue.
-    function startNext() {
-      while (running.current.size < PARALLEL && queue.current.length) {
-        const item = queue.current.shift();
-        const xhr = new XMLHttpRequest();
-        running.current.set(item.id, xhr);
-        let last = 0;
-        update(item.id, { status: "uploading" });
+  // One XHR; resolves { status, body }, rejects Offline on network failure.
+  const send = useCallback((ctrl, method, url, body, onProgress) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      ctrl.xhr = xhr;
+      xhr.open(method, url);
+      let last = 0;
+      xhr.upload.onprogress = (e) => {
+        loadedBytes.current += e.loaded - last;
+        last = e.loaded;
+        onProgress?.(e.loaded);
+      };
+      xhr.onload = () => {
+        let parsed = {};
+        try {
+          parsed = JSON.parse(xhr.responseText);
+        } catch {}
+        resolve({ status: xhr.status, body: parsed });
+      };
+      xhr.onerror = () => reject(new Offline());
+      xhr.ontimeout = () => reject(new Offline());
+      xhr.onabort = () => reject(new Cancelled());
+      xhr.send(body);
+    });
+  }, []);
 
-        xhr.open("PUT", item.url);
-        xhr.upload.onprogress = (e) => {
-          loadedBytes.current += e.loaded - last;
-          last = e.loaded;
-          update(item.id, { loaded: e.loaded });
-        };
-        const finish = (patch) => {
-          running.current.delete(item.id);
-          update(item.id, patch);
-          startNext();
-        };
-        xhr.onload = () => {
-          let body = {};
-          try {
-            body = JSON.parse(xhr.responseText);
-          } catch {}
-          if (xhr.status >= 200 && xhr.status < 300) {
-            finish({ status: "done", loaded: item.file.size, savedAs: body.name });
-            onUploadedRef.current?.(body, item.file);
-          } else {
-            finish({ status: "error", error: body.error || `Failed (${xhr.status})` });
+  const runSimple = useCallback(
+    async (item, ctrl) => {
+      const res = await send(ctrl, "PUT", item.url, item.file, (loaded) => update(item.id, { loaded }));
+      if (res.status >= 200 && res.status < 300) {
+        update(item.id, { status: "done", loaded: item.file.size, savedAs: res.body.name });
+        onUploadedRef.current?.(res.body, item.file);
+      } else update(item.id, { status: "error", error: res.body.error || `Failed (${res.status})` });
+    },
+    [send, update]
+  );
+
+  const runResumable = useCallback(
+    async (item, ctrl) => {
+      const { file } = item;
+      const id = uploadId(item.path, file);
+      ctrl.uploadId = id;
+      let offset = null;
+      let attempt = 0;
+      for (;;) {
+        if (ctrl.cancelled) throw new Cancelled();
+        try {
+          if (offset === null) {
+            // Ask the PC how much it already has (0 for a new upload).
+            const res = await send(ctrl, "POST", "/api/upload", JSON.stringify({ id, name: item.path, size: file.size }));
+            if (res.status >= 500 && res.status !== 507) throw new Offline();
+            if (res.status !== 200) return update(item.id, { status: "error", error: res.body.error || `Failed (${res.status})`, note: null });
+            offset = res.body.offset;
+            update(item.id, {
+              loaded: offset,
+              note: offset > 0 && attempt === 0 ? `Resuming from ${Math.round((offset / file.size) * 100)}%` : null,
+            });
           }
-        };
-        xhr.onerror = () => finish({ status: "error", error: "Connection lost" });
-        xhr.onabort = () => finish({ status: "cancelled" });
-        xhr.send(item.file);
+          const end = Math.min(file.size, offset + CHUNK);
+          const start = offset;
+          const res = await send(ctrl, "PUT", `/api/upload?id=${id}&offset=${start}`, file.slice(start, end), (loaded) =>
+            update(item.id, { loaded: start + loaded })
+          );
+          if (res.status === 409) {
+            offset = res.body.offset; // the PC has a different amount: continue from there
+            continue;
+          }
+          if (res.status >= 500 && res.status !== 507) throw new Offline();
+          if (res.status >= 400) return update(item.id, { status: "error", error: res.body.error || `Failed (${res.status})`, note: null });
+          offset = res.body.offset;
+          if (attempt) update(item.id, { note: null });
+          attempt = 0;
+          if (res.body.done) {
+            update(item.id, { status: "done", loaded: file.size, savedAs: res.body.name, note: null });
+            onUploadedRef.current?.(res.body, file);
+            return;
+          }
+        } catch (error) {
+          if (error instanceof Cancelled || ctrl.cancelled) throw new Cancelled();
+          // Connection dropped: wait a little longer each time, then pick up where the PC left off.
+          attempt++;
+          const wait = Math.min(MAX_WAIT_S, 2 ** attempt);
+          update(item.id, { note: navigator.onLine === false ? "No connection · will resume" : `Connection lost · retrying in ${wait}s` });
+          await waitOrOnline(wait, ctrl);
+          offset = null;
+        }
       }
+    },
+    [send, update]
+  );
+
+  const pump = useCallback(() => {
+    while (running.current.size < PARALLEL && queue.current.length) {
+      const item = queue.current.shift();
+      const ctrl = { cancelled: false };
+      running.current.set(item.id, ctrl);
+      update(item.id, { status: "uploading" });
+      const run = item.path ? runResumable(item, ctrl) : runSimple(item, ctrl);
+      run
+        .catch((error) => {
+          if (error instanceof Cancelled) update(item.id, { status: "cancelled", note: null });
+          else update(item.id, { status: "error", error: error instanceof Offline ? "Connection lost" : error.message, note: null });
+        })
+        .finally(() => {
+          running.current.delete(item.id);
+          pump();
+        });
     }
-    startNext();
-  }, [update]);
+  }, [runResumable, runSimple, update]);
 
   const enqueue = useCallback(
     (fileList) => {
@@ -77,7 +187,7 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl }) {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file,
         // Fixed when queued, so switching folders mid-upload doesn't redirect it.
-        url: urlForRef.current(file),
+        ...(pathForRef.current ? { path: pathForRef.current(file) } : { url: urlForRef.current(file) }),
         loaded: 0,
         status: "waiting",
       }));
@@ -90,8 +200,14 @@ export default function useUploader({ onUploaded, urlFor = defaultUrl }) {
 
   const cancel = useCallback(
     (id) => {
-      const xhr = running.current.get(id);
-      if (xhr) return xhr.abort();
+      const ctrl = running.current.get(id);
+      if (ctrl) {
+        ctrl.cancelled = true;
+        ctrl.xhr?.abort();
+        ctrl.wake?.();
+        if (ctrl.uploadId) fetch(`/api/upload?id=${ctrl.uploadId}`, { method: "DELETE" }).catch(() => {});
+        return;
+      }
       queue.current = queue.current.filter((it) => it.id !== id);
       update(id, { status: "cancelled" });
     },

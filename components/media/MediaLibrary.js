@@ -186,8 +186,9 @@ export default function MediaLibrary() {
   }, [load]);
 
   // Uploads land in the folder that was open when they were picked.
-  const uploadUrl = useCallback((file) => actionUrl(joinPath(dirRef.current, file.name)), []);
-  const uploader = useUploader({ onUploaded: load, urlFor: uploadUrl });
+  // Resumable: big files go up in pieces and survive dropped connections.
+  const uploadPath = useCallback((file) => joinPath(dirRef.current, file.name), []);
+  const uploader = useUploader({ onUploaded: load, pathFor: uploadPath });
   // Phone Back closes the viewer / dialog / selection instead of leaving the app.
   useBackClose(Boolean(openPath), () => setOpenPath(null));
   useBackClose(Boolean(renaming), () => setRenaming(null));

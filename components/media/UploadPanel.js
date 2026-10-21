@@ -95,11 +95,13 @@ export default function UploadPanel({ items, speed, active, onCancel, onClear, o
                   </span>
                   <span
                     className={`shrink-0 text-xs tabular-nums ${
-                      it.status === "error" ? "text-red-400" : it.status === "done" ? "text-sky-300" : "text-zinc-500"
+                      it.status === "error" ? "text-red-400" : it.status === "done" ? "text-sky-300" : it.note ? "text-amber-200" : "text-zinc-500"
                     }`}
                   >
                     {it.status === "uploading"
-                      ? `${Math.round(itemPct)}%`
+                      ? it.note
+                        ? `${it.note} · ${Math.round(itemPct)}%`
+                        : `${Math.round(itemPct)}%`
                       : it.status === "done"
                         ? formatSize(it.file.size)
                         : it.status === "error"
@@ -112,7 +114,7 @@ export default function UploadPanel({ items, speed, active, onCancel, onClear, o
                     <button
                       onClick={() => onCancel(it.id)}
                       aria-label="Cancel upload"
-                      className="-mr-1 rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
+                      className="-my-2 -mr-2 rounded-lg p-2.5 text-zinc-500 transition-colors hover:text-zinc-200 active:bg-white/5"
                     >
                       <CloseIcon size={14} />
                     </button>
