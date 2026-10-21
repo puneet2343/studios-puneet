@@ -7,6 +7,9 @@ import Logo from "@/components/Logo";
 import Toaster from "@/components/Toaster";
 import {
   CalendarIcon,
+  ChevronRightIcon,
+  CopyIcon,
+  DotsIcon,
   DriveIcon,
   EyeIcon,
   EyeOffIcon,
@@ -19,6 +22,7 @@ import {
   MoonIcon,
   RefreshIcon,
   SunIcon,
+  TrashIcon,
   WifiOffIcon,
 } from "@/components/icons";
 import { setThemePreference, useThemePreference } from "@/components/theme";
@@ -37,6 +41,13 @@ const NAV = [
     items: [{ label: "Instagram Export", short: "Instagram", href: "/instagram", icon: InstagramIcon, tab: true }],
   },
   {
+    section: "Tools",
+    items: [
+      { label: "Recycle Bin", href: "/trash", icon: TrashIcon, tool: true },
+      { label: "Duplicates", href: "/duplicates", icon: CopyIcon, tool: true },
+    ],
+  },
+  {
     section: "Coming soon",
     items: [
       { label: "Projects", icon: FolderIcon },
@@ -45,6 +56,8 @@ const NAV = [
   },
 ];
 const TABS = NAV.flatMap((g) => g.items).filter((i) => i.tab);
+// On phones these live in the "More" sheet.
+const TOOLS = NAV.flatMap((g) => g.items).filter((i) => i.tool);
 const AUTH_HINT = "ps.authed";
 
 const ShellContext = createContext({ loggedOut: () => {}, setStorage: () => {} });
@@ -193,6 +206,7 @@ export default function AppShell({ children }) {
   if (authed === null && !hint) return <Splash />;
 
   const current = NAV.flatMap((g) => g.items).find((i) => i.href && isActive(i.href, pathname));
+  const onTool = Boolean(current?.tool);
 
   return (
     <ShellContext.Provider value={{ loggedOut, setStorage }}>
@@ -308,13 +322,13 @@ export default function AppShell({ children }) {
                 <button
                   onClick={() => setSettingsOpen(true)}
                   className={`flex h-[3.75rem] w-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors active:scale-95 ${
-                    settingsOpen ? "text-zinc-50" : "text-zinc-500"
+                    settingsOpen || onTool ? "text-zinc-50" : "text-zinc-500"
                   }`}
                 >
-                  <span className={`flex h-7 w-12 items-center justify-center rounded-full ${settingsOpen ? "bg-white/[0.09]" : ""}`}>
-                    <GearIcon size={20} />
+                  <span className={`flex h-7 w-12 items-center justify-center rounded-full ${settingsOpen || onTool ? "bg-white/[0.09]" : ""}`}>
+                    <DotsIcon size={20} className="rotate-90" />
                   </span>
-                  Settings
+                  More
                 </button>
               </li>
             </ul>
@@ -332,6 +346,21 @@ export default function AppShell({ children }) {
                     <p className="text-xs text-zinc-500">Signed in · studio PC</p>
                     {version && <p className="text-xs tabular-nums text-zinc-500">Version · {version}</p>}
                   </div>
+                </div>
+                <p className="mb-2 px-1 text-xs font-medium uppercase tracking-[0.06em] text-zinc-500">Tools</p>
+                <div className="mb-5 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+                  {TOOLS.map(({ label, href, icon: Icon }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setSettingsOpen(false)}
+                      className="flex items-center gap-3 border-b border-white/[0.05] px-4 py-3.5 text-[15px] text-zinc-100 last:border-0 active:bg-white/5"
+                    >
+                      <Icon size={19} className="text-zinc-400" />
+                      <span className="flex-1">{label}</span>
+                      <ChevronRightIcon size={16} className="text-zinc-600" />
+                    </Link>
+                  ))}
                 </div>
                 <p className="mb-2 px-1 text-xs font-medium uppercase tracking-[0.06em] text-zinc-500">Appearance</p>
                 <ThemeSwitch large />

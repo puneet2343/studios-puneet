@@ -3,10 +3,13 @@ import { Readable } from "node:stream";
 import { isAuthed, unauthorized } from "@/lib/auth";
 import { kindOf, resolveName } from "@/lib/media";
 import { getThumb } from "@/lib/thumbs";
+import { trashPath } from "@/lib/bin";
 
 export async function GET(request) {
   if (!isAuthed(request)) return unauthorized();
-  const full = resolveName(request.nextUrl.searchParams.get("name"));
+  // ?trash=<id> shows a thumbnail for something in the Recycle Bin.
+  const params = request.nextUrl.searchParams;
+  const full = params.has("trash") ? trashPath(params.get("trash")) : resolveName(params.get("name"));
   if (!full || !["image", "video"].includes(kindOf(full))) {
     return new Response(null, { status: 404 });
   }
