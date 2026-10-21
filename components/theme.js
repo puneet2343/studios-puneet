@@ -15,7 +15,11 @@ function apply(pref) {
   const theme = resolve(pref);
   root.dataset.theme = theme;
   root.dataset.themePref = pref;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[theme]);
+  // The app’s own choice wins over the phone setting, so drop the media conditions.
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    m.removeAttribute("media");
+    m.setAttribute("content", THEME_COLORS[theme]);
+  });
   window.dispatchEvent(new Event("ps-theme"));
 }
 

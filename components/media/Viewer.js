@@ -12,6 +12,7 @@ import {
   PencilIcon,
   TrashIcon,
 } from "@/components/icons";
+import VideoPlayer from "@/components/media/VideoPlayer";
 import { downloadUrl, fileUrl, thumbUrl } from "@/components/media/urls";
 import { formatDateTime, formatDuration, formatSize } from "@/lib/format";
 
@@ -32,7 +33,7 @@ function IconButton({ label, onClick, href, download, danger, children }) {
   );
 }
 
-function Stage({ file }) {
+function Stage({ file, onControls }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -49,18 +50,7 @@ function Stage({ file }) {
   }
 
   if (file.kind === "video") {
-    return (
-      <video
-        src={fileUrl(file)}
-        poster={thumbUrl(file)}
-        controls
-        autoPlay
-        playsInline
-        preload="auto"
-        onError={() => setFailed(true)}
-        className="max-h-full max-w-full rounded-sm bg-black shadow-2xl"
-      />
-    );
+    return <VideoPlayer file={file} onControls={onControls} onError={() => setFailed(true)} />;
   }
 
   if (file.kind === "audio") {
@@ -139,7 +129,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
 
   // Swipe gestures follow the finger: sideways browses, downwards closes.
   function onTouchStart(e) {
-    if (e.touches.length > 1 || e.target.closest("video, button, a, aside")) return;
+    if (e.touches.length > 1 || e.target.closest("video, button, a, aside, [data-player]")) return;
     gesture.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, axis: null };
   }
   function onTouchMove(e) {
@@ -223,7 +213,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
       <div
         className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-16"
         onClick={(e) => {
-          if (!e.target.closest("video, button, a, aside")) setChrome((c) => !c);
+          if (!e.target.closest("video, button, a, aside, [data-player]")) setChrome((c) => !c);
         }}
       >
         <div className="flex h-full w-full items-center justify-center will-change-transform" style={stageStyle}>
@@ -233,7 +223,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
               enterFrom === "right" ? "anim-from-right" : enterFrom === "left" ? "anim-from-left" : "anim-pop"
             }`}
           >
-            <Stage file={file} />
+            <Stage file={file} onControls={setChrome} />
           </div>
         </div>
 

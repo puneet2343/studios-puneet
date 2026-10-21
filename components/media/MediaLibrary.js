@@ -382,23 +382,24 @@ export default function MediaLibrary() {
           <button
             onClick={() => setSelected(new Set())}
             aria-label="Clear selection"
-            className="rounded-full p-2 text-zinc-300 transition-colors hover:bg-white/5"
+            className="rounded-full p-2.5 text-zinc-300 transition-colors hover:bg-white/5"
           >
             <CloseIcon size={20} />
           </button>
-          <span className="mr-auto pl-1 text-[15px] font-medium tabular-nums text-zinc-100">{selected.size} selected</span>
-          <Button variant="ghost" onClick={() => setSelected(new Set(visible.map((f) => f.name)))} className="max-sm:px-2.5">
-            Select all
+          <span className="mr-auto whitespace-nowrap pl-1 text-[15px] font-medium tabular-nums text-zinc-100">{selected.size} selected</span>
+          <Button variant="ghost" onClick={() => setSelected(new Set(visible.map((f) => f.name)))} className="whitespace-nowrap max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
+            <span className="sm:hidden">All</span>
+            <span className="max-sm:hidden">Select all</span>
           </Button>
-          <Button variant="ghost" onClick={downloadSelected} aria-label="Download" className="max-sm:px-2.5">
+          <Button variant="ghost" onClick={downloadSelected} aria-label="Download" className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
             <DownloadIcon size={18} />
             <span className="max-sm:hidden">Download</span>
           </Button>
-          <Button variant="ghost" onClick={() => setMoving([...selected].map((n) => joinPath(dir, n)))} aria-label="Move" className="max-sm:px-2.5">
+          <Button variant="ghost" onClick={() => setMoving([...selected].map((n) => joinPath(dir, n)))} aria-label="Move" className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
             <MoveIcon size={18} />
             <span className="max-sm:hidden">Move</span>
           </Button>
-          <Button variant="ghost" onClick={() => remove([...selected])} aria-label="Delete" className="text-red-300 hover:bg-red-500/10 max-sm:px-2.5">
+          <Button variant="ghost" onClick={() => remove([...selected])} aria-label="Delete" className="text-red-300 hover:bg-red-500/10 max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
             <TrashIcon size={18} />
             <span className="max-sm:hidden">Delete</span>
           </Button>
@@ -486,7 +487,7 @@ export default function MediaLibrary() {
                 <button
                   key={f.id}
                   onClick={() => setFilter(f.id)}
-                  className={`flex-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm transition-colors sm:px-3.5 md:flex-none ${
+                  className={`flex-1 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors sm:px-3.5 md:flex-none ${
                     filter === f.id ? "bg-white/[0.09] text-zinc-50" : "text-zinc-500 hover:text-zinc-200"
                   }`}
                 >
@@ -501,7 +502,7 @@ export default function MediaLibrary() {
                 value={sort}
                 onChange={(e) => setSort(e.target.value)}
                 aria-label="Sort"
-                className="w-10 appearance-none rounded-xl border border-white/[0.07] bg-white/[0.02] py-2 text-sm text-transparent outline-none transition-colors focus:border-violet-400/50 md:w-auto md:pl-3 md:pr-8 md:text-zinc-300 md:hover:text-zinc-100"
+                className="h-11 w-11 appearance-none rounded-xl border border-white/[0.07] bg-white/[0.02] py-2 text-sm text-transparent outline-none transition-colors focus:border-violet-400/50 md:w-auto md:pl-3 md:pr-8 md:text-zinc-300 md:hover:text-zinc-100"
               >
                 {Object.entries(SORTS).map(([id, s]) => (
                   <option key={id} value={id} className="bg-zinc-900">
@@ -516,7 +517,7 @@ export default function MediaLibrary() {
               onClick={() => setNaming({})}
               aria-label="New folder"
               title="New folder"
-              className="shrink-0 rounded-xl border border-white/[0.07] bg-white/[0.02] p-2 text-zinc-400 transition-colors hover:text-zinc-100 lg:hidden"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.02] text-zinc-400 transition-colors hover:text-zinc-100 lg:hidden"
             >
               <FolderPlusIcon size={18} />
             </button>

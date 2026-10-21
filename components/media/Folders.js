@@ -28,10 +28,10 @@ export function Breadcrumbs({ dir, onGo }) {
   const parts = dir.split("/");
   return (
     <nav aria-label="Folder path" className="no-scrollbar -mx-1 flex items-center gap-0.5 overflow-x-auto text-sm">
-      <button onClick={() => onGo(parentOf(dir))} aria-label="Up one folder" className="mr-1 rounded-lg p-1.5 text-zinc-300 transition-colors hover:bg-white/5">
+      <button onClick={() => onGo(parentOf(dir))} aria-label="Up one folder" className="-ml-1.5 mr-0.5 rounded-xl p-2.5 text-zinc-300 transition-colors hover:bg-white/5 active:bg-white/5">
         <ChevronLeftIcon size={18} />
       </button>
-      <button onClick={() => onGo("")} className="shrink-0 rounded-md px-1.5 py-1 text-zinc-500 transition-colors hover:text-zinc-100">
+      <button onClick={() => onGo("")} className="shrink-0 rounded-md px-1.5 py-2.5 text-zinc-500 transition-colors hover:text-zinc-100">
         Media
       </button>
       {parts.map((part, i) => {
@@ -43,7 +43,7 @@ export function Breadcrumbs({ dir, onGo }) {
             {last ? (
               <span className="px-1.5 py-1 font-medium text-zinc-200">{part}</span>
             ) : (
-              <button onClick={() => onGo(path)} className="rounded-md px-1.5 py-1 text-zinc-500 transition-colors hover:text-zinc-100">
+              <button onClick={() => onGo(path)} className="rounded-md px-1.5 py-2.5 text-zinc-500 transition-colors hover:text-zinc-100">
                 {part}
               </button>
             )}
@@ -105,17 +105,22 @@ function FolderCardImpl({ folder, onOpen, onMenu }) {
           />
         </>
       ) : (
-        <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-500/[0.12] to-sky-500/[0.08] text-violet-300">
-          <FolderIcon size={40} strokeWidth={1.4} />
+        // No photos inside yet: a tinted tile, so the label uses normal text colours.
+        <div className="flex h-full items-start bg-gradient-to-br from-violet-500/[0.10] to-sky-500/[0.07] p-3 text-violet-300">
+          <FolderIcon size={30} strokeWidth={1.5} />
         </div>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-3 pb-2.5 pt-10">
-        <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-[#fff]">
+      <div
+        className={`pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-2.5 ${
+          cover ? "bg-gradient-to-t from-black/75 via-black/35 to-transparent pt-10" : ""
+        }`}
+      >
+        <p className={`flex items-center gap-1.5 truncate text-sm font-semibold ${cover ? "text-[#fff]" : "text-zinc-100"}`}>
           {cover && <FolderIcon size={14} className="shrink-0 opacity-80" />}
           <span className="truncate">{folder.name}</span>
         </p>
-        <p className="mt-0.5 text-[11px] tabular-nums text-[#fff]/65">
+        <p className={`mt-0.5 text-[11px] tabular-nums ${cover ? "text-[#fff]/65" : "text-zinc-500"}`}>
           {folder.count === 0 ? "Empty" : `${folder.count} item${folder.count === 1 ? "" : "s"}`}
         </p>
       </div>
@@ -127,7 +132,9 @@ function FolderCardImpl({ folder, onOpen, onMenu }) {
           e.stopPropagation();
           onMenu(folder);
         }}
-        className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-[#fff] backdrop-blur-sm transition-[opacity,background-color] hover:bg-black/50 lg:opacity-0 lg:group-hover:opacity-100"
+        className={`absolute right-1 top-1 flex h-10 w-10 items-center justify-center rounded-full transition-[opacity,background-color] lg:opacity-0 lg:group-hover:opacity-100 ${
+          cover ? "bg-black/30 text-[#fff] backdrop-blur-sm hover:bg-black/50" : "text-zinc-400 hover:bg-white/5"
+        }`}
       >
         <DotsIcon size={16} />
       </button>
@@ -274,7 +281,7 @@ export function MoveDialog({ moving, from, onClose, onMove }) {
     >
       <div className="mb-2 flex min-h-9 items-center gap-1 text-sm">
         {dir && (
-          <button onClick={() => { setFolders(null); setDir(parentOf(dir)); }} aria-label="Up one folder" className="rounded-lg p-1.5 text-zinc-300 hover:bg-white/5">
+          <button onClick={() => { setFolders(null); setDir(parentOf(dir)); }} aria-label="Up one folder" className="rounded-xl p-2.5 text-zinc-300 hover:bg-white/5">
             <ChevronLeftIcon size={18} />
           </button>
         )}

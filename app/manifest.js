@@ -5,12 +5,13 @@ export default function manifest() {
     description: "Creator workspace: media library on the studio PC",
     start_url: "/",
     display: "standalone",
-    background_color: "#09090b",
-    theme_color: "#09090b",
+    // Launch-screen colour: matches the app in light mode, so opening it doesn’t flash dark.
+    background_color: "#fbfbfc",
+    theme_color: "#fbfbfc",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

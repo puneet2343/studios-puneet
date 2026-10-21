@@ -105,11 +105,11 @@ body {
   to { background-position: -200% 0; }
 }
 
-.anim-fade { animation: fade-in 180ms var(--ease-out) both; }
-.anim-rise { animation: rise 240ms var(--ease-out) both; }
-.anim-pop { animation: pop 220ms var(--ease-out) both; }
-.anim-drawer { animation: drawer 240ms var(--ease-out) both; }
-.anim-sheet { animation: sheet 260ms var(--ease-out) both; }
+.anim-fade { animation: fade-in 180ms var(--ease-out) backwards; }
+.anim-rise { animation: rise 240ms var(--ease-out) backwards; }
+.anim-pop { animation: pop 220ms var(--ease-out) backwards; }
+.anim-drawer { animation: drawer 240ms var(--ease-out) backwards; }
+.anim-sheet { animation: sheet 260ms var(--ease-out) backwards; }
 
 .skeleton {
   background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 50%, var(--skeleton-a) 75%);
@@ -130,8 +130,8 @@ body {
 @keyframes from-left {
   from { opacity: 0; transform: translateX(-48px); }
 }
-.anim-from-right { animation: from-right 240ms var(--ease-out) both; }
-.anim-from-left { animation: from-left 240ms var(--ease-out) both; }
+.anim-from-right { animation: from-right 240ms var(--ease-out) backwards; }
+.anim-from-left { animation: from-left 240ms var(--ease-out) backwards; }
 
 /* Opening screens: the logo settles in, the glow drifts slowly, the bar sweeps. */
 @keyframes logo-in {
@@ -144,7 +144,7 @@ body {
   from { transform: translateX(-100%); }
   to { transform: translateX(300%); }
 }
-.anim-logo { animation: logo-in 520ms var(--ease-out) both; }
+.anim-logo { animation: logo-in 520ms var(--ease-out) backwards; }
 .glow-drift { animation: drift 9s ease-in-out infinite; }
 .glow-drift-alt { animation: drift 12s ease-in-out infinite reverse; }
 .progress-sweep { animation: sweep 1.3s var(--ease-out) infinite; }

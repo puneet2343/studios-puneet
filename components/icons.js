@@ -144,3 +144,27 @@ export const WifiOffIcon = make(<path d="M3 3l18 18M8.5 16.4a5 5 0 0 1 7 0M5 12.
 export const FolderPlusIcon = make(<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5zM12 10.5v5M9.5 13h5" />);
 export const MoveIcon = make(<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5zM9 13h6m-2.5-2.5L15 13l-2.5 2.5" />);
 export const DotsIcon = make(<path d="M12 6h.01M12 12h.01M12 18h.01" strokeWidth="3" />);
+export const PauseIcon = ({ size = 12, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" />
+    <rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" />
+  </svg>
+);
+export const ReplayIcon = make(<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5" />);
+export const BackTenIcon = make(
+  <>
+    <path d="M12 4.5A7.5 7.5 0 1 1 4.5 12M12 4.5 9 2m3 2.5L9 7" />
+    <text x="12.2" y="15.4" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none">10</text>
+  </>
+);
+export const ForwardTenIcon = make(
+  <>
+    <path d="M12 4.5A7.5 7.5 0 1 0 19.5 12M12 4.5 15 2m-3 2.5L15 7" />
+    <text x="11.8" y="15.4" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none">10</text>
+  </>
+);
+export const VolumeIcon = make(<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" />);
+export const MuteIcon = make(<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16.5 9.5l5 5m0-5-5 5" />);
+export const ExpandIcon = make(<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />);
+export const ShrinkIcon = make(<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />);
+export const SpeedIcon = make(<path d="M4.5 16.5a8 8 0 1 1 15 0M12 12.5l3.5-3.5M12 13.5h.01" />);

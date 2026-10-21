@@ -20,8 +20,12 @@ export const metadata = {
   appleWebApp: { capable: true, title: "Puneet Studios", statusBarStyle: "black-translucent" },
 };
 
+// Status-bar colour follows the phone’s light/dark setting until the app’s own choice loads.
 export const viewport = {
-  themeColor: "#09090b",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbfbfc" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+  ],
 };
 
 export default function RootLayout({ children }) {
