@@ -23,7 +23,7 @@ export function ItemRow({ trip, item, role, onOpen, onToggleDone, compact = fals
   const showStatus = (item.type === "transport" || item.type === "stay") && role !== "staying" && role !== "checkout" ? item.status !== "booked" || compact : item.status === "cancelled";
   return (
     <li className={`flex items-stretch gap-3 ${role === "staying" ? "opacity-60" : ""}`}>
-      <div className="w-14 shrink-0 pt-3 text-right text-xs tabular-nums text-zinc-500">{time ? fmtTime(time) : ""}</div>
+      <div className="hidden w-14 shrink-0 pt-3 text-right text-xs tabular-nums text-zinc-500 min-[400px]:block">{time ? fmtTime(time) : ""}</div>
       <div className="relative flex flex-col items-center">
         <span className={`z-10 mt-1.5 flex h-9 w-9 items-center justify-center rounded-xl ${type.tint}`}>
           {createElement(iconFor(item), { size: 17 })}
@@ -35,7 +35,17 @@ export function ItemRow({ trip, item, role, onOpen, onToggleDone, compact = fals
           <p className={`min-w-0 flex-1 text-[15px] font-medium leading-snug text-zinc-100 ${item.done ? "text-zinc-500 line-through" : ""}`}>{itemTitle(item)}</p>
           {item.cost > 0 && role !== "staying" && role !== "checkout" && <span className="shrink-0 text-xs tabular-nums text-zinc-400">{money(item.cost, trip.currency)}</span>}
         </div>
-        {subtitle(item, role) && <p className="mt-0.5 truncate text-xs text-zinc-500">{subtitle(item, role)}</p>}
+        {(subtitle(item, role) || time) && (
+          <p className="mt-0.5 truncate text-xs text-zinc-500">
+            {time && (
+              <span className="font-medium tabular-nums text-zinc-400 min-[400px]:hidden">
+                {fmtTime(time)}
+                {subtitle(item, role) ? " · " : ""}
+              </span>
+            )}
+            {subtitle(item, role)}
+          </p>
+        )}
         {(showStatus || item.files.length > 0 || item.paid) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {showStatus && <Pill className={status.tone}>{status.label}</Pill>}

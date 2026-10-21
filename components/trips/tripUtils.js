@@ -21,7 +21,7 @@ export function money(amount, currency = "INR", { compact = false } = {}) {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency,
-      maximumFractionDigits: compact || Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: compact && Math.abs(amount) >= 100000 ? 1 : compact || Number.isInteger(amount) ? 0 : 2,
       notation: compact && Math.abs(amount) >= 100000 ? "compact" : "standard",
     }).format(amount);
   } catch {

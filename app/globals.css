@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* `short:` = a phone held sideways (little height), so bars and sheets get compact. */
+@custom-variant short (@media (max-height: 500px));
+
 /*
   Theming: components use Tailwind's zinc/white palette as written for dark mode.
   Light mode re-maps those palette variables (zinc scale reversed, white <-> black)

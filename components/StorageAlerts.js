@@ -106,7 +106,7 @@ export function StorageAlertsSwitch() {
           aria-label="Low-space alerts"
           disabled={state === "checking" || state === "busy" || state === "unsupported" || state === "blocked"}
           onClick={on ? turnOff : turnOn}
-          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-40 ${on ? "bg-violet-500" : "bg-white/15"}`}
+          className={`relative h-7 w-12 shrink-0 rounded-full before:absolute before:-inset-2.5 before:content-[""] transition-colors duration-200 disabled:opacity-40 ${on ? "bg-violet-500" : "bg-white/15"}`}
         >
           <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-[#fff] shadow transition-[left] duration-200 ${on ? "left-[1.375rem]" : "left-0.5"}`} />
         </button>

@@ -10,7 +10,7 @@ const { spawn } = require("child_process");
 
 const [projectDir, base, outDir] = process.argv.slice(2);
 fs.mkdirSync(outDir, { recursive: true });
-const sharp = require(path.join(projectDir, "node_modules", "sharp"));
+const sharp = require(path.resolve(projectDir, "node_modules", "sharp"));
 const env = Object.fromEntries(
   fs.readFileSync(path.join(projectDir, ".env.local"), "utf8").split(/\r?\n/).filter((l) => l.includes("=") && !l.startsWith("#"))
     .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; })

@@ -405,7 +405,7 @@ function Shell({ onBack, title, subtitle, actions, tabs, children }) {
   return (
     <div className="anim-fade fixed inset-0 z-[45] flex flex-col bg-zinc-950">
       <div id="trip-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-zinc-950/90 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-xl">
+        <header className="sticky top-0 z-20 short:static border-b border-white/[0.06] bg-zinc-950/90 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-xl">
           {/* Same width as the content below, so on big screens it lines up instead of stretching. */}
           <div className="mx-auto max-w-2xl">
           <div className="flex items-center gap-1 pb-2">

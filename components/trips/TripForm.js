@@ -103,10 +103,10 @@ export default function TripForm({ trip, onClose, onSave }) {
           <Field label="Who's going" hint="Add friends to split expenses and see who owes whom.">
             <div className="flex flex-wrap gap-1.5">
               {f.travellers.map((p) => (
-                <span key={p.id} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-3 pr-1 text-sm text-zinc-100">
+                <span key={p.id} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] pl-3.5 pr-0.5 text-sm text-zinc-100">
                   {p.name}
                   {f.travellers.length > 1 && (
-                    <button type="button" onClick={() => set({ travellers: f.travellers.filter((x) => x.id !== p.id) })} aria-label={`Remove ${p.name}`} className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 hover:bg-white/10">
+                    <button type="button" onClick={() => set({ travellers: f.travellers.filter((x) => x.id !== p.id) })} aria-label={`Remove ${p.name}`} className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-white/10">
                       <CloseIcon size={13} />
                     </button>
                   )}

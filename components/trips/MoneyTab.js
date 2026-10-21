@@ -47,7 +47,7 @@ export default function MoneyTab({ trip, onOpen }) {
     <div className="pb-24">
       <section className="rounded-3xl border border-white/[0.07] bg-gradient-to-br from-violet-500/[0.10] to-sky-500/[0.06] p-4">
         <p className="text-xs font-medium text-zinc-400">Spent so far</p>
-        <p className="mt-0.5 text-3xl font-semibold tracking-tight tabular-nums text-zinc-50">{money(spent, c)}</p>
+        <p className="mt-0.5 break-words text-3xl font-semibold tracking-tight tabular-nums text-zinc-50 max-[359px]:text-[1.65rem]">{money(spent, c)}</p>
         {budget ? (
           <>
             <p className={`mt-1 text-sm ${pct > 1 ? "text-red-300" : pct > 0.8 ? "text-amber-200" : "text-zinc-400"}`}>
@@ -67,7 +67,7 @@ export default function MoneyTab({ trip, onOpen }) {
           </div>
           <div className="rounded-xl bg-white/[0.05] px-3 py-2">
             <p className="text-zinc-500">Per day (avg)</p>
-            <p className="mt-0.5 text-sm font-medium tabular-nums text-zinc-100">{daysWithSpend ? money(spent / daysWithSpend, c) : "—"}</p>
+            <p className="mt-0.5 text-sm font-medium tabular-nums text-zinc-100">{daysWithSpend ? money(Math.round(spent / daysWithSpend), c) : "—"}</p>
           </div>
         </div>
       </section>
@@ -102,7 +102,7 @@ export default function MoneyTab({ trip, onOpen }) {
                 {days.map((d, i) => (
                   <div key={d} className="flex min-w-7 flex-1 flex-col items-center justify-end gap-1" title={`${fmtDay(d)}: ${money(byDay[d] ?? 0, c)}`}>
                     <div className="w-full max-w-8 rounded-t-md bg-gradient-to-t from-violet-500/70 to-sky-400/70" style={{ height: `${((byDay[d] ?? 0) / dayMax) * 80}px`, minHeight: byDay[d] ? 3 : 0 }} />
-                    <span className="text-[10px] tabular-nums text-zinc-500">D{i + 1}</span>
+                    <span className="text-[11px] tabular-nums text-zinc-500">D{i + 1}</span>
                   </div>
                 ))}
               </div>

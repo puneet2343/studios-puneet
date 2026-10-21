@@ -463,7 +463,7 @@ function NewExport({ onStarted }) {
                 <span className="font-medium text-zinc-100">Instagram re-compresses every upload</span> and plays Reels at up to 1080p, so no file can force
                 4K playback there. This gives it the cleanest file it accepts, so less quality is lost.
               </p>
-              <button onClick={() => setShowWhy((s) => !s)} className="mt-2 inline-flex items-center gap-1 text-sky-300">
+              <button onClick={() => setShowWhy((s) => !s)} className="-my-1.5 mt-0.5 inline-flex min-h-9 items-center gap-1 text-sky-300">
                 What this does
                 <ChevronDownIcon size={15} className={`transition-transform duration-200 ${showWhy ? "rotate-180" : ""}`} />
               </button>
@@ -499,7 +499,7 @@ function NewExport({ onStarted }) {
 
       {/* Phone: the main action stays in reach above the tab bar. */}
       {ready && (
-        <div className="anim-sheet fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-30 border-t border-white/[0.06] bg-zinc-950/90 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <div className="anim-sheet fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] short:bottom-[calc(2.75rem+env(safe-area-inset-bottom))] z-30 border-t border-white/[0.06] bg-zinc-950/90 px-4 py-3 backdrop-blur-xl lg:hidden">
           <ExportButton onClick={startExport} busy={submitting} format={options.format} />
         </div>
       )}

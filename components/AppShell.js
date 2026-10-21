@@ -325,7 +325,7 @@ export default function AppShell({ children }) {
             </nav>
           </aside>
 
-          <div className="flex min-w-0 flex-1 flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0">
+          <div className="flex min-w-0 flex-1 flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))] short:pb-[calc(3.25rem+env(safe-area-inset-bottom))] lg:pb-0">
             {/* Phone top bar: just where you are. Navigation lives in the bottom tabs. */}
             <div
               className={`sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/[0.06] bg-zinc-950/85 px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-xl transition-transform duration-300 ease-out lg:hidden ${
@@ -372,14 +372,14 @@ export default function AppShell({ children }) {
                   <li key={href}>
                     <Link
                       href={href}
-                      className={`flex h-[3.75rem] flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors duration-150 active:scale-95 ${
+                      className={`flex h-[3.75rem] flex-col items-center justify-center gap-1 text-[11px] font-medium short:h-11 short:gap-0 transition-colors duration-150 active:scale-95 ${
                         active ? "text-zinc-50" : "text-zinc-500"
                       }`}
                     >
                       <span className={`relative flex h-7 w-12 items-center justify-center transition-transform duration-200 ${active ? "scale-105" : ""}`}>
                         <Icon size={20} strokeWidth={active ? 2.1 : 1.8} />
                       </span>
-                      {short ?? label}
+                      <span className="short:sr-only">{short ?? label}</span>
                     </Link>
                   </li>
                 );
@@ -387,14 +387,14 @@ export default function AppShell({ children }) {
               <li>
                 <button
                   onClick={() => setSettingsOpen(true)}
-                  className={`flex h-[3.75rem] w-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors active:scale-95 ${
+                  className={`flex h-[3.75rem] w-full flex-col items-center justify-center gap-1 text-[11px] font-medium short:h-11 short:gap-0 transition-colors active:scale-95 ${
                     settingsOpen || onTool ? "text-zinc-50" : "text-zinc-500"
                   }`}
                 >
                   <span className={`relative flex h-7 w-12 items-center justify-center transition-transform duration-200 ${settingsOpen || onTool ? "scale-105" : ""}`}>
                     <DotsIcon size={20} className="rotate-90" />
                   </span>
-                  More
+                  <span className="short:sr-only">More</span>
                 </button>
               </li>
             </ul>
@@ -403,7 +403,7 @@ export default function AppShell({ children }) {
           {settingsOpen && (
             <div className="fixed inset-0 z-50 lg:hidden">
               <div className="anim-fade absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSettingsOpen(false)} />
-              <div className="anim-sheet absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-white/[0.08] bg-zinc-950 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl">
+              <div className="anim-sheet absolute inset-x-0 bottom-0 max-h-[calc(100dvh-0.5rem)] overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/[0.08] bg-zinc-950 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl">
                 <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15" />
                 <div className="mb-5 flex items-center gap-3 px-1">
                   <Logo size={40} />

@@ -16,6 +16,9 @@ const nextConfig = {
   /* config options here */
   experimental: {
     agentFeedback: true,
+    // The build cache doesn't notice new Tailwind classes in components, so the CSS could
+    // come out stale (styles missing on phones). Always build fresh.
+    turbopackFileSystemCacheForBuild: false,
   },
   // The service worker must always be re-checked, or phones keep running an old one.
   async headers() {

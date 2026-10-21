@@ -37,13 +37,14 @@ function BookingCard({ trip, item, onOpen, onMarkBooked }) {
       {(item.ref || item.seat) && (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2">
           <span className="min-w-0 flex-1 text-xs text-zinc-400">
+            {/* Label above the number, so a long number never splits across lines on small phones. */}
             {item.ref && (
               <>
-                {item.type === "stay" ? "Confirmation" : item.mode === "train" || item.mode === "flight" ? "PNR" : "Booking"}{" "}
-                <span className="font-mono text-sm tracking-wide text-zinc-100">{item.ref}</span>
+                <span className="block">{item.type === "stay" ? "Confirmation" : item.mode === "train" || item.mode === "flight" ? "PNR" : "Booking"}</span>
+                <span className="block break-all font-mono text-sm tracking-wide text-zinc-100">{item.ref}</span>
               </>
             )}
-            {item.seat && <span className="ml-2">Seat {item.seat}</span>}
+            {item.seat && <span className={`block ${item.ref ? "mt-1" : ""}`}>Seat {item.seat}</span>}
           </span>
           {item.ref && (
             <button
@@ -60,18 +61,18 @@ function BookingCard({ trip, item, onOpen, onMarkBooked }) {
       {(files.length > 0 || item.location || item.status === "tobook") && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {files.map((f) => (
-            <a key={f.id} href={fileUrl(trip.id, f.id)} target="_blank" rel="noreferrer" className="flex h-8 max-w-[12rem] items-center gap-1 rounded-lg border border-white/10 px-2.5 text-xs text-zinc-200 active:bg-white/5">
+            <a key={f.id} href={fileUrl(trip.id, f.id)} target="_blank" rel="noreferrer" className="flex h-9 max-w-[12rem] items-center gap-1 rounded-lg border border-white/10 px-2.5 text-xs text-zinc-200 active:bg-white/5">
               <ClipIcon size={12} className="shrink-0" />
               <span className="truncate">{f.name}</span>
             </a>
           ))}
           {item.location && (
-            <a href={mapsUrl(item.location)} target="_blank" rel="noreferrer" className="flex h-8 items-center rounded-lg border border-white/10 px-2.5 text-xs text-zinc-200 active:bg-white/5">
+            <a href={mapsUrl(item.location)} target="_blank" rel="noreferrer" className="flex h-9 items-center rounded-lg border border-white/10 px-3 text-xs text-zinc-200 active:bg-white/5">
               Map
             </a>
           )}
           {item.status === "tobook" && (
-            <button onClick={() => onMarkBooked(item)} className="ml-auto flex h-8 items-center rounded-lg bg-emerald-500/15 px-3 text-xs font-medium text-emerald-300 active:bg-emerald-500/25">
+            <button onClick={() => onMarkBooked(item)} className="ml-auto flex h-9 items-center rounded-lg bg-emerald-500/15 px-3.5 text-xs font-medium text-emerald-300 active:bg-emerald-500/25">
               Mark booked
             </button>
           )}
