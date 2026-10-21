@@ -72,6 +72,11 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Our own pull-to-refresh (components/PullToRefresh.js) replaces the browser's, and the page itself never stretches. */
+html {
+  overscroll-behavior-y: none;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -152,6 +157,9 @@ body {
 /* The installed app's launch screen is Android's own (manifest icon + background).
    The app fades in after it instead of showing a second logo screen. */
 body > * { animation: fade-in 260ms var(--ease-out) backwards; }
+
+/* Bottom tab highlight: glides between tabs with a slight settle. */
+.tab-glide { transition: left 380ms cubic-bezier(0.3, 1.35, 0.5, 1); }
 
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }

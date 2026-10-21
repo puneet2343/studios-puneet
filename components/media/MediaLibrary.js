@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AppShell";
+import PullToRefresh from "@/components/PullToRefresh";
+import { haptic } from "@/lib/haptics";
 import Dialog, { Button } from "@/components/Dialog";
 import { useToast } from "@/components/Toaster";
 import {
@@ -286,6 +288,35 @@ export default function MediaLibrary() {
   const totalSize = useMemo(() => (files ?? []).reduce((sum, f) => sum + f.size, 0), [files]);
   const selecting = selected.size > 0;
 
+  // Long-press a tile, then slide the finger over others to select them as well
+  // (like Google Photos). Scrolling is held off while doing it; near the screen edges
+  // the page scrolls along.
+  const startDragSelect = useCallback((path) => {
+    haptic("tap");
+    const seen = new Set([path]);
+    const move = (e) => {
+      if (e.cancelable) e.preventDefault();
+      const t = e.touches[0];
+      const tile = document.elementFromPoint(t.clientX, t.clientY)?.closest?.("[data-path]");
+      const p = tile?.dataset.path;
+      if (p && !seen.has(p)) {
+        seen.add(p);
+        haptic("tick");
+        setSelected((prev) => new Set(prev).add(p));
+      }
+      if (t.clientY > window.innerHeight - 140) window.scrollBy(0, 14);
+      else if (t.clientY < 130) window.scrollBy(0, -14);
+    };
+    const end = () => {
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", end);
+      window.removeEventListener("touchcancel", end);
+    };
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", end);
+    window.addEventListener("touchcancel", end);
+  }, []);
+
   const toggle = useCallback((path) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -297,6 +328,7 @@ export default function MediaLibrary() {
 
   const remove = useCallback(
     async (paths) => {
+      haptic("tap");
       paths.forEach((p) => hidden.current.add(p));
       setFiles((list) => list?.filter((f) => !paths.includes(f.path)));
       setRemote((r) => (r ? { ...r, files: r.files.filter((f) => !paths.includes(f.path)) } : r));
@@ -346,6 +378,7 @@ export default function MediaLibrary() {
   // Optimistic: the star changes at once, then the PC is told.
   const setFavorite = useCallback(
     async (list, on) => {
+      haptic("tap");
       const keys = new Set(list.map((f) => f.key));
       const mark = (arr) => arr?.map((f) => (keys.has(f.key) ? { ...f, favorite: on || undefined } : f));
       setFiles(mark);
@@ -476,21 +509,31 @@ export default function MediaLibrary() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col">
+      <PullToRefresh
+        disabled={selecting || Boolean(openPath) || Boolean(trimming)}
+        onRefresh={async () => {
+          await Promise.all([refreshAll(), dir ? null : loadTrips()]);
+          haptic("success");
+        }}
+      />
       {selecting ? (
-        <div className="anim-fade fixed inset-x-0 top-0 z-40 flex items-center gap-1 border-b border-white/[0.06] bg-zinc-950/90 px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-xl sm:px-4 lg:left-64">
+        <div className="anim-fade fixed inset-x-0 top-0 z-40 flex items-center gap-0.5 border-b border-white/[0.06] bg-zinc-950/90 px-2 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-xl sm:px-4 lg:left-64">
           <button
             onClick={() => setSelected(new Set())}
             aria-label="Clear selection"
-            className="rounded-full p-2.5 text-zinc-300 transition-colors hover:bg-white/5"
+            className="rounded-full p-2.5 text-zinc-300 transition-colors hover:bg-white/5 max-sm:p-2"
           >
             <CloseIcon size={20} />
           </button>
-          <span className="mr-auto whitespace-nowrap pl-1 text-[15px] font-medium tabular-nums text-zinc-100">{selected.size} selected</span>
-          <Button variant="ghost" onClick={() => setSelected(new Set(visible.map((f) => f.path)))} className="whitespace-nowrap max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
+          <span className="mr-auto whitespace-nowrap pl-0.5 text-[15px] font-semibold tabular-nums text-zinc-100">
+            {selected.size}
+            <span className="font-medium max-[400px]:hidden"> selected</span>
+          </span>
+          <Button variant="ghost" onClick={() => setSelected(new Set(visible.map((f) => f.path)))} className="whitespace-nowrap max-sm:h-11 max-sm:min-w-10 max-sm:px-2">
             <span className="sm:hidden">All</span>
             <span className="max-sm:hidden">Select all</span>
           </Button>
-          <Button variant="ghost" onClick={downloadSelected} aria-label="Download" className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
+          <Button variant="ghost" onClick={downloadSelected} aria-label="Download" className="max-sm:h-11 max-sm:min-w-10 max-sm:px-2">
             <DownloadIcon size={18} />
             <span className="max-sm:hidden">Download</span>
           </Button>
@@ -502,7 +545,7 @@ export default function MediaLibrary() {
               setSelected(new Set());
             }}
             aria-label="Favourite"
-            className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5"
+            className="max-sm:h-11 max-sm:min-w-10 max-sm:px-2"
           >
             {visible.filter((f) => selected.has(f.path)).every((f) => f.favorite) ? (
               <StarFilledIcon size={18} className="text-amber-300" />
@@ -511,11 +554,11 @@ export default function MediaLibrary() {
             )}
             <span className="max-sm:hidden">Favourite</span>
           </Button>
-          <Button variant="ghost" onClick={() => setMoving([...selected])} aria-label="Move" className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
+          <Button variant="ghost" onClick={() => setMoving([...selected])} aria-label="Move" className="max-sm:h-11 max-sm:min-w-10 max-sm:px-2">
             <MoveIcon size={18} />
             <span className="max-sm:hidden">Move</span>
           </Button>
-          <Button variant="ghost" onClick={() => remove([...selected])} aria-label="Delete" className="text-red-300 hover:bg-red-500/10 max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
+          <Button variant="ghost" onClick={() => remove([...selected])} aria-label="Delete" className="text-red-300 hover:bg-red-500/10 max-sm:h-11 max-sm:min-w-10 max-sm:px-2">
             <TrashIcon size={18} />
             <span className="max-sm:hidden">Delete</span>
           </Button>
@@ -724,6 +767,7 @@ export default function MediaLibrary() {
                     selecting={selecting}
                     onOpen={setOpenPath}
                     onToggle={toggle}
+                    onDragSelect={startDragSelect}
                   />
                 ))}
               </div>

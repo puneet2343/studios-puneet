@@ -17,6 +17,7 @@ import {
   TrashIcon,
 } from "@/components/icons";
 import VideoPlayer from "@/components/media/VideoPlayer";
+import ZoomableImage from "@/components/media/ZoomableImage";
 import { downloadUrl, fileUrl, thumbUrl } from "@/components/media/urls";
 import { formatDateTime, formatDuration, formatSize } from "@/lib/format";
 
@@ -37,7 +38,7 @@ function IconButton({ label, onClick, href, download, danger, children }) {
   );
 }
 
-function Stage({ file, onControls }) {
+function Stage({ file, onControls, onTap }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -73,16 +74,14 @@ function Stage({ file, onControls }) {
           fullLoaded ? "opacity-0" : "opacity-100"
         }`}
       />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <ZoomableImage
         src={fileUrl(file)}
         alt={file.name}
         decoding="async"
+        onTap={onTap}
         onLoad={() => setFullLoaded(true)}
         onError={() => setFailed(true)}
-        className={`relative max-h-full max-w-full object-contain transition-opacity duration-300 ${
-          fullLoaded ? "opacity-100" : "opacity-0"
-        }`}
+        className={`relative max-h-full max-w-full object-contain ${fullLoaded ? "opacity-100" : "opacity-0"}`}
       />
     </div>
   );
@@ -134,12 +133,18 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
 
   // Swipe gestures follow the finger: sideways browses, downwards closes.
   function onTouchStart(e) {
-    if (e.touches.length > 1 || e.target.closest("video, button, a, aside, [data-player]")) return;
+    if (e.touches.length > 1 || e.target.closest("video, button, a, aside, [data-player], [data-zoomed]")) return;
     gesture.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, axis: null };
   }
   function onTouchMove(e) {
     const g = gesture.current;
     if (!g) return;
+    // A second finger means a pinch-zoom, not a swipe.
+    if (e.touches.length > 1) {
+      gesture.current = null;
+      setDrag(null);
+      return;
+    }
     const dx = e.touches[0].clientX - g.x;
     const dy = e.touches[0].clientY - g.y;
     if (!g.axis && Math.hypot(dx, dy) > 8) g.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
@@ -265,7 +270,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
       <div
         className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-16"
         onClick={(e) => {
-          if (!e.target.closest("video, button, a, aside, [data-player]")) setChrome((c) => !c);
+          if (!e.target.closest("video, button, a, aside, [data-player], [data-zoomable]")) setChrome((c) => !c);
         }}
       >
         <div className="flex h-full w-full items-center justify-center will-change-transform" style={stageStyle}>
@@ -275,7 +280,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
               enterFrom === "right" ? "anim-from-right" : enterFrom === "left" ? "anim-from-left" : "anim-pop"
             }`}
           >
-            <Stage file={file} onControls={setChrome} />
+            <Stage file={file} onControls={setChrome} onTap={() => setChrome((c) => !c)} />
           </div>
         </div>
 

@@ -120,6 +120,32 @@ function useAutoUpdate() {
   return { ready, builtAt };
 }
 
+// Phone top bar: tucks away while scrolling down through media, comes back on the
+// slightest scroll up (or near the top), like Instagram.
+function useHideOnScroll() {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    let frame = 0;
+    function onScroll() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const y = window.scrollY;
+        if (y < 80) setHidden(false);
+        else if (y > last + 6) setHidden(true);
+        else if (y < last - 6) setHidden(false);
+        last = y;
+      });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  return hidden;
+}
+
 // "Tue, 21 Oct · 11:14 am": when the running version was built.
 function versionLabel(builtAt) {
   if (!builtAt) return null;
@@ -141,6 +167,7 @@ export default function AppShell({ children }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storage, setStorage] = useState(null);
   const { ready: updateReady, builtAt } = useAutoUpdate();
+  const barHidden = useHideOnScroll();
   const version = versionLabel(builtAt);
   const pathname = usePathname();
   const hint = useAuthHint();
@@ -207,6 +234,8 @@ export default function AppShell({ children }) {
 
   const current = NAV.flatMap((g) => g.items).find((i) => i.href && isActive(i.href, pathname));
   const onTool = Boolean(current?.tool);
+  // Which bottom tab the sliding highlight sits under (the last slot is "More").
+  const tabIndex = settingsOpen || onTool ? TABS.length : Math.max(0, TABS.findIndex((t) => isActive(t.href, pathname)));
 
   return (
     <ShellContext.Provider value={{ loggedOut, setStorage }}>
@@ -271,7 +300,11 @@ export default function AppShell({ children }) {
 
           <div className="flex min-w-0 flex-1 flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0">
             {/* Phone top bar: just where you are. Navigation lives in the bottom tabs. */}
-            <div className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/[0.06] bg-zinc-950/85 px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-xl lg:hidden">
+            <div
+              className={`sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/[0.06] bg-zinc-950/85 px-4 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-xl transition-transform duration-300 ease-out lg:hidden ${
+                barHidden ? "-translate-y-full" : ""
+              }`}
+            >
               <Logo size={32} />
               <div className="min-w-0 flex-1 leading-tight">
                 <p className="truncate text-[15px] font-semibold tracking-tight text-zinc-100">Puneet Studios</p>
@@ -299,7 +332,13 @@ export default function AppShell({ children }) {
 
           {/* Phone bottom tab bar */}
           <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.06] bg-zinc-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
-            <ul className="mx-auto grid max-w-md grid-cols-3">
+            <ul className="relative mx-auto grid max-w-md grid-cols-3">
+              {/* One highlight that glides to the active tab. */}
+              <span
+                aria-hidden="true"
+                className="tab-glide pointer-events-none absolute top-[0.4375rem] h-7 w-12 rounded-full bg-white/[0.09]"
+                style={{ left: `calc(${(tabIndex * 100) / (TABS.length + 1)}% + (${100 / (TABS.length + 1)}% - 3rem) / 2)` }}
+              />
               {TABS.map(({ label, short, href, icon: Icon }) => {
                 const active = isActive(href, pathname);
                 return (
@@ -310,7 +349,7 @@ export default function AppShell({ children }) {
                         active ? "text-zinc-50" : "text-zinc-500"
                       }`}
                     >
-                      <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200 ${active ? "bg-white/[0.09]" : ""}`}>
+                      <span className={`relative flex h-7 w-12 items-center justify-center transition-transform duration-200 ${active ? "scale-105" : ""}`}>
                         <Icon size={20} strokeWidth={active ? 2.1 : 1.8} />
                       </span>
                       {short ?? label}
@@ -325,7 +364,7 @@ export default function AppShell({ children }) {
                     settingsOpen || onTool ? "text-zinc-50" : "text-zinc-500"
                   }`}
                 >
-                  <span className={`flex h-7 w-12 items-center justify-center rounded-full ${settingsOpen || onTool ? "bg-white/[0.09]" : ""}`}>
+                  <span className={`relative flex h-7 w-12 items-center justify-center transition-transform duration-200 ${settingsOpen || onTool ? "scale-105" : ""}`}>
                     <DotsIcon size={20} className="rotate-90" />
                   </span>
                   More

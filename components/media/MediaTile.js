@@ -16,7 +16,7 @@ function FallbackIcon({ kind }) {
   );
 }
 
-function MediaTile({ file, selected, selecting, onOpen, onToggle }) {
+function MediaTile({ file, selected, selecting, onOpen, onToggle, onDragSelect }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const pressTimer = useRef(null);
@@ -29,8 +29,9 @@ function MediaTile({ file, selected, selecting, onOpen, onToggle }) {
     longPressed.current = false;
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
-      navigator.vibrate?.(10);
       onToggle(file.path);
+      // Keep the finger down and slide over other tiles to select them too.
+      onDragSelect?.(file.path);
     }, LONG_PRESS_MS);
   }
   const cancelPress = () => clearTimeout(pressTimer.current);
@@ -49,6 +50,7 @@ function MediaTile({ file, selected, selecting, onOpen, onToggle }) {
       role="button"
       tabIndex={0}
       aria-label={file.name}
+      data-path={file.path}
       aria-pressed={selecting ? selected : undefined}
       onClick={onClick}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onClick())}
