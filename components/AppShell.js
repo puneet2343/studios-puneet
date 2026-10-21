@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import Logo from "@/components/Logo";
-import Toaster from "@/components/Toaster";
+import Toaster, { useToast } from "@/components/Toaster";
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -26,7 +26,7 @@ import {
   WifiOffIcon,
 } from "@/components/icons";
 import { setThemePreference, useThemePreference } from "@/components/theme";
-import useBackClose from "@/components/useBackClose";
+import useBackClose, { closeOverlaysThen, useExitGuard } from "@/components/useBackClose";
 import { formatSize } from "@/lib/format";
 import { storageLevel } from "@/lib/storage-levels";
 import { StorageAlertsSwitch } from "@/components/StorageAlerts";
@@ -168,6 +168,13 @@ function versionLabel(builtAt) {
   return `${day} · ${time}`;
 }
 
+// Back with nothing open on the first screen: "Press back again to exit" (not an instant exit).
+function ExitGuard() {
+  const toast = useToast();
+  useExitGuard(true, () => toast("Press back again to exit", { duration: 2000 }));
+  return null;
+}
+
 function setAuthHint(on) {
   try {
     if (on) localStorage.setItem(AUTH_HINT, "1");
@@ -183,6 +190,7 @@ export default function AppShell({ children }) {
   const barHidden = useHideOnScroll();
   const version = versionLabel(builtAt);
   const pathname = usePathname();
+  const router = useRouter();
   const hint = useAuthHint();
   useBackClose(settingsOpen, () => setSettingsOpen(false));
 
@@ -253,6 +261,7 @@ export default function AppShell({ children }) {
   return (
     <ShellContext.Provider value={{ loggedOut, setStorage }}>
       <Toaster>
+        <ExitGuard />
         <div className="flex min-h-dvh flex-1">
           {/* Desktop sidebar */}
           <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 border-r border-white/[0.06] bg-zinc-950 lg:block">
@@ -405,7 +414,12 @@ export default function AppShell({ children }) {
                     <Link
                       key={href}
                       href={href}
-                      onClick={() => setSettingsOpen(false)}
+                      onClick={(e) => {
+                        // Close the sheet (and its Back entry) first, then open the page,
+                        // so Back from that page returns straight here.
+                        e.preventDefault();
+                        closeOverlaysThen(() => router.push(href));
+                      }}
                       className="flex items-center gap-3 border-b border-white/[0.05] px-4 py-3.5 text-[15px] text-zinc-100 last:border-0 active:bg-white/5"
                     >
                       <Icon size={19} className="text-zinc-400" />

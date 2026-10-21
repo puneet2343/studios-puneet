@@ -21,6 +21,7 @@ import {
 import Properties from "@/components/media/Properties";
 import VideoPlayer from "@/components/media/VideoPlayer";
 import ZoomableImage from "@/components/media/ZoomableImage";
+import useBackClose from "@/components/useBackClose";
 import { downloadUrl, fileUrl, thumbUrl } from "@/components/media/urls";
 import { formatDuration, formatSize } from "@/lib/format";
 
@@ -93,6 +94,7 @@ function Stage({ file, onControls, onTap }) {
 export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onExtractAudio, onFavorite }) {
   const [showInfo, setShowInfo] = useState(false);
   const [more, setMore] = useState(false);
+  useBackClose(more, () => setMore(false));
   const [chrome, setChrome] = useState(true); // tap the photo to hide/show controls
   const [drag, setDrag] = useState(null); // { dx, dy } while a finger is down
   const [enterFrom, setEnterFrom] = useState(null); // slide direction for the next file
@@ -252,6 +254,8 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
           <IconButton label="More" onClick={() => setMore((m) => !m)}>
             <DotsIcon size={19} />
           </IconButton>
+          {/* Tap anywhere else to close the menu. */}
+          {more && <div className="fixed inset-0 z-10" onClick={() => setMore(false)} />}
           {more && (
             <div className="anim-pop absolute right-0 top-11 z-20 w-48 overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
               {[

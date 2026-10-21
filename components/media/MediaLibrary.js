@@ -195,6 +195,9 @@ export default function MediaLibrary() {
   useBackClose(Boolean(openPath), () => setOpenPath(null));
   useBackClose(Boolean(renaming), () => setRenaming(null));
   useBackClose(selected.size > 0, () => setSelected(new Set()));
+  // Back clears a search and returns from Videos / Photos / Favourites to All.
+  useBackClose(query.trim() !== "", () => setQuery(""));
+  useBackClose(filter !== "all", () => setFilter("all"));
   const { enqueue } = uploader;
 
   // Check the picked files fit on the PC before spending time uploading them.

@@ -14,6 +14,7 @@ import {
   VolumeIcon,
 } from "@/components/icons";
 import { fileUrl, thumbUrl } from "@/components/media/urls";
+import useBackClose from "@/components/useBackClose";
 
 const SKIP = 10;
 const HIDE_AFTER_MS = 2600;
@@ -100,6 +101,11 @@ export default function VideoPlayer({ file, onControls, onError }) {
   const [notice, setNotice] = useState("");
   const switching = useRef(null); // { time, play } carried across a quality switch
   const stalls = useRef([]);
+  // Back (or a tap on the picture) closes an open speed / quality menu, not the viewer.
+  useBackClose(speedMenu || qualityMenu, () => {
+    setSpeedMenu(false);
+    setQualityMenu(false);
+  });
   const downAt = useRef(null); // where the finger went down, to tell taps from swipes
 
   // ----- Quality -----
@@ -318,7 +324,11 @@ export default function VideoPlayer({ file, onControls, onError }) {
     // A finger that travelled was a swipe (next / previous / close), not a tap.
     const down = downAt.current;
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) return;
-    setSpeedMenu(false);
+    if (speedMenu || qualityMenu) {
+      setSpeedMenu(false);
+      setQualityMenu(false);
+      return;
+    }
     const rect = root.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
 
