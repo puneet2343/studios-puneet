@@ -19,6 +19,15 @@ const SKIP = 10;
 const HIDE_AFTER_MS = 2600;
 const DOUBLE_TAP_MS = 280;
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const QUALITY_KEY = "ps.quality";
+
+const qualityLabel = (q, short) => (q === "original" ? (short >= 2160 ? "4K" : short ? `${short}p` : "Original") : `${q}p`);
+
+// A slow or metered connection: Auto starts on a lighter copy instead of the full 4K file.
+function slowConnection() {
+  const c = typeof navigator !== "undefined" ? navigator.connection : null;
+  return Boolean(c && (c.saveData || ["slow-2g", "2g", "3g"].includes(c.effectiveType) || (c.downlink && c.downlink < 8)));
+}
 const RESUME_KEY = "ps.resume";
 
 const clock = (t) => {
@@ -77,6 +86,126 @@ export default function VideoPlayer({ file, onControls, onError }) {
   const [scrub, setScrub] = useState(null); // fraction 0..1 while dragging the bar
   const [skip, setSkip] = useState(null); // { side, seconds, id } ripple
   const [resumed, setResumed] = useState(0);
+  // Quality: what the viewer chose ("auto", "original" or 720…) and what's playing now.
+  const [choice, setChoice] = useState(() => {
+    try {
+      return localStorage.getItem(QUALITY_KEY) || "auto";
+    } catch {
+      return "auto";
+    }
+  });
+  const [playingQ, setPlayingQ] = useState("original");
+  const [qStatus, setQStatus] = useState(null); // { short, options: [{ q, ready, progress }] }
+  const [qualityMenu, setQualityMenu] = useState(false);
+  const [notice, setNotice] = useState("");
+  const switching = useRef(null); // { time, play } carried across a quality switch
+  const stalls = useRef([]);
+
+  // ----- Quality -----
+  const name = file.path ?? file.name;
+  const loadStatus = useCallback(async () => {
+    const d = await fetch(`/api/stream?name=${encodeURIComponent(name)}&status=1`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (d) setQStatus(d);
+    return d;
+  }, [name]);
+
+  const switchTo = useCallback((q) => {
+    const v = video.current;
+    setPlayingQ((current) => {
+      if (current === q) return current;
+      if (v) switching.current = { time: v.currentTime, play: !v.paused };
+      return q;
+    });
+  }, []);
+
+  const prepare = useCallback(
+    (q) =>
+      fetch("/api/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, q }),
+      }).catch(() => {}),
+    [name]
+  );
+
+  // First look: what lighter copies exist, and pick the starting quality.
+  useEffect(() => {
+    let live = true;
+    const first = setTimeout(() => loadStatus().then((d) => {
+      if (!live || !d) return;
+      const ready = (q) => d.options.find((o) => o.q === q)?.ready;
+      if (typeof choice === "string" && choice !== "auto" && choice !== "original" && ready(Number(choice))) switchTo(Number(choice));
+      else if (choice === "auto" && slowConnection()) {
+        const best = d.options.find((o) => o.q <= 720 && o.ready);
+        if (best) switchTo(best.q);
+        else if (d.options.some((o) => o.q === 720)) prepare(720);
+      }
+    }), 0);
+    return () => {
+      live = false;
+      clearTimeout(first);
+    };
+    // Only when a different video opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
+
+  // While a copy is being made, keep checking; switch to it when it's ready (if still wanted).
+  const preparing = qStatus?.options.some((o) => o.progress !== null);
+  useEffect(() => {
+    if (!preparing) return;
+    const timer = setInterval(async () => {
+      const d = await loadStatus();
+      if (!d) return;
+      const wanted = choice === "auto" ? d.options.find((o) => o.q <= 720 && o.ready)?.q : Number(choice);
+      if (wanted && d.options.find((o) => o.q === wanted)?.ready && (choice !== "auto" || playingQ === "original")) {
+        switchTo(wanted);
+        if (choice === "auto") setNotice(`Switched to ${wanted}p for smoother playback`);
+      }
+    }, 1200);
+    return () => clearInterval(timer);
+  }, [preparing, loadStatus, choice, playingQ, switchTo]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(""), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  function choose(q) {
+    setQualityMenu(false);
+    setChoice(String(q));
+    try {
+      localStorage.setItem(QUALITY_KEY, String(q));
+    } catch {}
+    if (q === "auto" || q === "original") return switchTo("original");
+    const option = qStatus?.options.find((o) => o.q === q);
+    if (option?.ready) switchTo(q);
+    else {
+      prepare(q);
+      setQStatus((st) => st && { ...st, options: st.options.map((o) => (o.q === q ? { ...o, progress: 0 } : o)) });
+      setNotice(`Preparing ${q}p on the studio PC… it'll switch over when ready`);
+    }
+  }
+
+  // Auto: if playback keeps pausing to load, step down to a lighter copy.
+  function onStall() {
+    if (choice !== "auto" || !playing) return;
+    const now = Date.now();
+    stalls.current = [...stalls.current.filter((t) => now - t < 20000), now];
+    if (stalls.current.length < 2) return;
+    stalls.current = [];
+    const lower = qStatus?.options.filter((o) => (playingQ === "original" ? true : o.q < playingQ));
+    const ready = lower?.find((o) => o.ready && o.q <= 720);
+    if (ready) {
+      switchTo(ready.q);
+      setNotice(`Switched to ${ready.q}p for smoother playback`);
+    } else if (lower?.some((o) => o.q === 720)) {
+      prepare(720);
+      setQStatus((st) => st && { ...st, options: st.options.map((o) => (o.q === 720 ? { ...o, progress: o.progress ?? 0 } : o)) });
+    }
+  }
 
   // ----- Controls visibility -----
   const show = useCallback((stay = false) => {
@@ -256,7 +385,8 @@ export default function VideoPlayer({ file, onControls, onError }) {
   const shown = scrub !== null ? scrub * duration : time;
   const pct = duration ? (shown / duration) * 100 : 0;
   const bufferedPct = duration ? (buffered / duration) * 100 : 0;
-  const controlsOn = controls || !playing || scrub !== null;
+  // Menus keep the controls up, so they never fade away mid-choice.
+  const controlsOn = controls || !playing || scrub !== null || speedMenu || qualityMenu;
   const fade = `transition-opacity duration-200 ${controlsOn ? "opacity-100" : "pointer-events-none opacity-0"}`;
 
   return (
@@ -271,7 +401,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
     >
       <video
         ref={video}
-        src={fileUrl(file)}
+        src={playingQ === "original" ? fileUrl(file) : `/api/stream?name=${encodeURIComponent(name)}&q=${playingQ}&k=${file.key}`}
         poster={thumbUrl(file)}
         autoPlay
         playsInline
@@ -280,6 +410,14 @@ export default function VideoPlayer({ file, onControls, onError }) {
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           setDuration(v.duration);
+          // Quality switch: carry on from the same moment.
+          if (switching.current) {
+            const { time, play } = switching.current;
+            switching.current = null;
+            v.currentTime = time;
+            if (play) v.play().catch(() => {});
+            return;
+          }
           const at = readResume(file.key);
           if (at > 5 && at < v.duration - 5) {
             v.currentTime = at;
@@ -306,7 +444,10 @@ export default function VideoPlayer({ file, onControls, onError }) {
           writeResume(file.key, 0);
           show(true);
         }}
-        onWaiting={() => setWaiting(true)}
+        onWaiting={() => {
+          setWaiting(true);
+          onStall();
+        }}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
         onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
@@ -349,6 +490,12 @@ export default function VideoPlayer({ file, onControls, onError }) {
         </CircleButton>
       </div>
 
+      {notice && (
+        <div className="anim-rise pointer-events-none absolute left-1/2 top-4 z-10 max-w-[90%] -translate-x-1/2 rounded-full bg-black/75 px-4 py-2 text-center text-xs text-[#fff] backdrop-blur">
+          {notice}
+        </div>
+      )}
+
       {resumed > 0 && (
         <div data-control className="anim-rise absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/70 py-1.5 pl-4 pr-1.5 text-xs text-[#fff] backdrop-blur">
           Resumed at {clock(resumed)}
@@ -374,8 +521,55 @@ export default function VideoPlayer({ file, onControls, onError }) {
             {clock(shown)} <span className="text-[#fff]/60">/ {clock(duration)}</span>
           </span>
 
+          {/* Not "relative": the menu lines up with the right edge of the player, not the button. */}
+          {qStatus && (
+            <div>
+              <BarButton
+                label="Quality"
+                onClick={() => {
+                  setSpeedMenu(false);
+                  setQualityMenu((o) => !o);
+                  loadStatus();
+                }}
+              >
+                <span className="rounded-md border border-[#fff]/70 px-1.5 py-px text-[11px] font-bold tabular-nums leading-tight">
+                  {choice === "auto" ? (playingQ === "original" ? "AUTO" : `AUTO·${playingQ}`) : qualityLabel(playingQ, qStatus.short)}
+                </span>
+              </BarButton>
+              {qualityMenu && (
+                <div className="anim-pop absolute bottom-[5.75rem] right-3 z-20 w-64 max-w-[calc(100%-1.5rem)] overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
+                  <p className="px-4 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-[#fff]/50">Quality</p>
+                  {[
+                    { q: "auto", label: "Auto", hint: "Adjusts to your connection" },
+                    { q: "original", label: `Original · ${qualityLabel("original", qStatus.short)}`, hint: "Full quality, needs fast internet" },
+                    ...qStatus.options.map((o) => ({
+                      q: o.q,
+                      label: `${o.q}p`,
+                      hint: o.progress !== null ? `Preparing… ${Math.round(o.progress * 100)}%` : o.ready ? "Ready" : "Tap to prepare (one-time)",
+                    })),
+                  ].map(({ q, label, hint }) => {
+                    const selected = String(choice) === String(q);
+                    return (
+                      <button
+                        key={q}
+                        onClick={() => choose(q)}
+                        className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/10 ${selected ? "text-violet-300" : "text-[#fff]"}`}
+                      >
+                        <span className="min-w-0">
+                          <span className={`block text-sm ${selected ? "font-semibold" : ""}`}>{label}</span>
+                          <span className="block truncate text-[11px] text-[#fff]/45">{hint}</span>
+                        </span>
+                        {selected && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="relative">
-            <BarButton label="Playback speed" onClick={() => setSpeedMenu((o) => !o)}>
+            <BarButton label="Playback speed" onClick={() => { setQualityMenu(false); setSpeedMenu((o) => !o); }}>
               {rate === 1 ? <SpeedIcon size={20} /> : <span className="text-[13px] font-semibold tabular-nums">{rate}×</span>}
             </BarButton>
             {speedMenu && (

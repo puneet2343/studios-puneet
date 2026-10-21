@@ -1,8 +1,9 @@
-import { createReadStream, createWriteStream, promises as fs } from "node:fs";
+import { createWriteStream, promises as fs } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import { isAuthed, unauthorized } from "@/lib/auth";
+import { serveFile } from "@/lib/serve-file";
 import { formatSize } from "@/lib/format";
 import { UPLOAD_RESERVE } from "@/lib/storage-levels";
 import {
@@ -67,7 +68,6 @@ export async function GET(request) {
   const versioned = request.nextUrl.searchParams.has("v");
   const headers = {
     "Content-Type": mimeType(file.name),
-    "Accept-Ranges": "bytes",
     "Cache-Control": versioned ? "private, max-age=31536000, immutable" : "private, no-cache",
     "Last-Modified": stat.mtime.toUTCString(),
     "Content-Disposition": `${
@@ -75,34 +75,7 @@ export async function GET(request) {
     }; filename*=UTF-8''${encodeURIComponent(file.name)}`,
   };
 
-  // Range requests let the browser seek in videos without downloading the whole file.
-  const range = request.headers.get("range");
-  const match = range && /^bytes=(\d*)-(\d*)$/.exec(range);
-  if (match && stat.size > 0) {
-    let start = match[1] === "" ? stat.size - Number(match[2]) : Number(match[1]);
-    let end = match[1] !== "" && match[2] !== "" ? Number(match[2]) : stat.size - 1;
-    start = Math.max(0, start);
-    end = Math.min(end, stat.size - 1);
-    if (start > end) {
-      return new Response(null, {
-        status: 416,
-        headers: { "Content-Range": `bytes */${stat.size}` },
-      });
-    }
-    const stream = createReadStream(file.full, { start, end });
-    return new Response(Readable.toWeb(stream), {
-      status: 206,
-      headers: {
-        ...headers,
-        "Content-Length": String(end - start + 1),
-        "Content-Range": `bytes ${start}-${end}/${stat.size}`,
-      },
-    });
-  }
-
-  return new Response(Readable.toWeb(createReadStream(file.full)), {
-    headers: { ...headers, "Content-Length": String(stat.size) },
-  });
+  return serveFile(request, file.full, stat.size, headers);
 }
 
 // Upload: the raw file is the request body. It is streamed to a temp file and only
