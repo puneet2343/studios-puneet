@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { createElement, useEffect, useState } from "react";
 import { useToast } from "@/components/Toaster";
-import { ArrowLeftIcon, ChecklistIcon, DotsIcon, MapIcon, PencilIcon, PinIcon, PlaneIcon, PlusIcon, TicketIcon, TrashIcon, UsersIcon, WalletIcon } from "@/components/icons";
+import { ArrowLeftIcon, ChartIcon, ChecklistIcon, DotsIcon, MapIcon, PencilIcon, PinIcon, PlaneIcon, PlusIcon, TicketIcon, TrashIcon, UsersIcon, WalletIcon } from "@/components/icons";
 import useBackClose from "@/components/useBackClose";
 import { ConfirmDialog } from "@/components/media/Folders";
 import { thumbUrl } from "@/components/media/urls";
+import AnalysisTab from "@/components/trips/AnalysisTab";
 import BookingsTab from "@/components/trips/BookingsTab";
 import ChecklistTab from "@/components/trips/ChecklistTab";
 import ExpenseSheet from "@/components/trips/ExpenseSheet";
@@ -23,6 +24,7 @@ const TABS = [
   { id: "plan", label: "Plan", icon: PinIcon },
   { id: "bookings", label: "Bookings", icon: TicketIcon },
   { id: "money", label: "Money", icon: WalletIcon },
+  { id: "analysis", label: "Analysis", icon: ChartIcon },
   { id: "checklist", label: "Checklist", icon: ChecklistIcon },
 ];
 
@@ -355,6 +357,7 @@ export default function TripDetail({ id, onBack, onDeleted }) {
         <BookingsTab trip={trip} onOpen={setItemSheet} onAdd={addItem} onMarkBooked={(item) => (haptic("success"), update((t) => ({ ...t, items: t.items.map((i) => (i.id === item.id ? { ...i, status: "booked" } : i)) })))} />
       )}
       {tab === "money" && <MoneyTab trip={trip} onOpen={setExpenseSheet} />}
+      {tab === "analysis" && <AnalysisTab trip={trip} />}
       {tab === "checklist" && <ChecklistTab trip={trip} update={update} />}
 
       {/* One main action per tab. During the trip, logging spends is what matters most. */}

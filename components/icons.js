@@ -245,3 +245,4 @@ export const ClockIcon = make(
   </>
 );
 export const MapIcon = make(<path d="m9 4.5-5 2v13l5-2 6 2 5-2v-13l-5 2zM9 4.5v13M15 6.5v13" />);
+export const ChartIcon = make(<path d="M4 4v15a1 1 0 0 0 1 1h15M8 16v-4M12 16V8M16 16v-6M20 16V6" />);

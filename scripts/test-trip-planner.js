@@ -185,13 +185,13 @@ const day = (n) => { const d = new Date(d0); d.setDate(d.getDate() + n); return 
   await tap(`[...document.querySelectorAll("button")].filter(b => b.textContent.trim() === "Use starter list")[0]`, 700);
   const packed = await js(`document.querySelectorAll("main ul li").length`);
   check("Starter packing list added", packed >= 8, `${packed} items`);
-  await tap(`document.querySelector("main ul li button")`, 500);
+  await tap(`document.querySelector("#trip-scroll main ul li button")`, 500);
   check("Ticking an item updates progress", (await text()).includes(`1 of ${packed} done`));
   await shot("09-checklist");
 
   // ---- Offline edit, then sync ----
   await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
-  await tap(`[...document.querySelectorAll("main ul li button")][2]`, 1800);
+  await tap(`[...document.querySelectorAll("#trip-scroll main ul li button")][2]`, 1800);
   check("Offline: shows 'will sync'", (await text()).includes("will sync") || (await text()).includes("Couldn't save"));
   await send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
   await js(`window.dispatchEvent(new Event("online"))`);
@@ -200,6 +200,12 @@ const day = (n) => { const d = new Date(d0); d.setDate(d.getDate() + n); return 
   const st = await serverTrip();
   check("PC has the offline change", st && st.checklist.filter((c) => c.done).length === 2, st ? `${st.checklist.filter((c) => c.done).length} ticked on PC` : "no trip");
   check("PC has everything", st && st.items.length === 3 && st.expenses.length === 2 && st.travellers.length === 2);
+
+  // ---- Analysis ----
+  await tabTo("Analysis");
+  const an = await text();
+  check("Analysis shows total, day chart and who paid", an.includes("Total spent") && an.includes("10,800") && /who paid/i.test(an) && (await js("!!document.querySelector(\"svg[role=img]\")")));
+  await shot("10-analysis");
 
   // ---- Overview & back to list ----
   await tabTo("Overview");

@@ -34,11 +34,18 @@
   --color-amber-200: oklch(0.924 0.12 95.746);
   --color-emerald-300: oklch(0.845 0.143 164.978);
   --color-pink-300: oklch(0.823 0.12 346.018);
+  /* Chart series (validated for colour-blind separation + contrast on each surface) */
+  --chart-1: #9085e9;
+  --chart-2: #d95926;
+  --chart-grid: rgb(255 255 255 / 0.08);
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
   --background: #fbfbfc;
+  --chart-1: #6250d6;
+  --chart-2: #eb6834;
+  --chart-grid: rgb(0 0 0 / 0.08);
   --foreground: #18181b;
   --skeleton-a: rgb(0 0 0 / 0.04);
   --skeleton-b: rgb(0 0 0 / 0.08);
