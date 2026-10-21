@@ -3,6 +3,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import Dialog, { Button } from "@/components/Dialog";
 import {
+  ArchiveIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   DotsIcon,
@@ -12,7 +13,7 @@ import {
   TrashIcon,
 } from "@/components/icons";
 import useBackClose from "@/components/useBackClose";
-import { thumbUrl } from "@/components/media/urls";
+import { thumbUrl, zipUrl } from "@/components/media/urls";
 
 export const parentOf = (dir) => dir.split("/").slice(0, -1).join("/");
 export const baseOf = (dir) => dir.split("/").at(-1);
@@ -50,6 +51,16 @@ export function Breadcrumbs({ dir, onGo }) {
           </span>
         );
       })}
+      {/* The whole folder (with subfolders) as one ZIP. */}
+      <a
+        href={zipUrl(dir)}
+        download
+        aria-label="Download this folder as ZIP"
+        className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-100 active:bg-white/5"
+      >
+        <ArchiveIcon size={16} />
+        ZIP
+      </a>
     </nav>
   );
 }
@@ -163,6 +174,9 @@ export function FolderMenu({ folder, onClose, onRename, onMove, onDelete }) {
         <button className={`${item} text-zinc-100`} onClick={onMove}>
           <MoveIcon size={18} className="text-zinc-400" /> Move to another folder
         </button>
+        <a className={`${item} text-zinc-100`} href={zipUrl(folder.path)} download onClick={onClose}>
+          <ArchiveIcon size={18} className="text-zinc-400" /> Download as ZIP
+        </a>
         <button className={`${item} text-red-300`} onClick={onDelete}>
           <TrashIcon size={18} /> Delete folder
         </button>

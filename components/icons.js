@@ -187,3 +187,12 @@ export const CopyIcon = make(
     <path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8" />
   </>
 );
+export const RotateRightIcon = make(<path d="M15 4.5h4.5V9M19.3 4.8A8 8 0 1 0 20 12" />);
+export const RotateLeftIcon = make(<path d="M9 4.5H4.5V9M4.7 4.8A8 8 0 1 1 4 12" />);
+export const FlipIcon = make(<path d="M12 3v18M9 6.5 4 18h5zM15 6.5 20 18h-5z" />);
+export const ArchiveIcon = make(
+  <>
+    <rect x="3.5" y="4" width="17" height="5" rx="1.5" />
+    <path d="M5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4" />
+  </>
+);

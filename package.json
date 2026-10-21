@@ -10,6 +10,8 @@
     "serve": "node scripts/serve.js"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
+    "exif-reader": "^2.0.3",
     "next": "16.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",

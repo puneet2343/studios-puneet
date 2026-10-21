@@ -11,15 +11,17 @@ import {
   FileIcon,
   InfoIcon,
   PencilIcon,
+  RotateRightIcon,
   ScissorsIcon,
   StarFilledIcon,
   StarIcon,
   TrashIcon,
 } from "@/components/icons";
+import Properties from "@/components/media/Properties";
 import VideoPlayer from "@/components/media/VideoPlayer";
 import ZoomableImage from "@/components/media/ZoomableImage";
 import { downloadUrl, fileUrl, thumbUrl } from "@/components/media/urls";
-import { formatDateTime, formatDuration, formatSize } from "@/lib/format";
+import { formatDuration, formatSize } from "@/lib/format";
 
 const SWIPE_PX = 60;
 
@@ -87,7 +89,7 @@ function Stage({ file, onControls, onTap }) {
   );
 }
 
-export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim, onFavorite }) {
+export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onFavorite }) {
   const [showInfo, setShowInfo] = useState(false);
   const [more, setMore] = useState(false);
   const [chrome, setChrome] = useState(true); // tap the photo to hide/show controls
@@ -207,7 +209,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
           <p className="truncate text-xs tabular-nums text-zinc-500">{details.join(" · ")}</p>
         </div>
         <span className="max-sm:hidden">
-          <IconButton label="Info" onClick={() => setShowInfo((v) => !v)}>
+          <IconButton label="Properties" onClick={() => setShowInfo((v) => !v)}>
             <InfoIcon size={19} />
           </IconButton>
         </span>
@@ -222,6 +224,11 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
           </IconButton>
         )}
         <span className="flex max-sm:hidden">
+          {file.kind === "video" && onRotate && (
+            <IconButton label="Rotate" onClick={() => onRotate(file)}>
+              <RotateRightIcon size={19} />
+            </IconButton>
+          )}
           <IconButton label="Rename" onClick={() => onRename(file)}>
             <PencilIcon size={18} />
           </IconButton>
@@ -240,7 +247,8 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
           {more && (
             <div className="anim-pop absolute right-0 top-11 z-20 w-48 overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
               {[
-                { label: "Info", icon: InfoIcon, run: () => setShowInfo((v) => !v) },
+                { label: "Properties", icon: InfoIcon, run: () => setShowInfo(true) },
+                ...(file.kind === "video" && onRotate ? [{ label: "Rotate / mirror", icon: RotateRightIcon, run: () => onRotate(file) }] : []),
                 { label: "Rename", icon: PencilIcon, run: () => onRename(file) },
               ].map(({ label, icon: Icon, run }) => (
                 <button
@@ -303,40 +311,10 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
           </button>
         )}
 
-        {showInfo && (
-          <aside className="anim-rise absolute bottom-4 right-4 z-10 w-72 max-w-[calc(100%-2rem)] rounded-2xl border border-white/10 bg-zinc-900/95 p-4 text-sm shadow-2xl backdrop-blur">
-            <p className="mb-3 break-all font-medium text-zinc-100">{file.name}</p>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-zinc-400">
-              {file.instagram && (
-                <>
-                  <dt className="text-zinc-500">Made with</dt>
-                  <dd className="flex items-center gap-1.5 text-pink-300">
-                    <DiamondIcon size={11} /> Instagram Export
-                  </dd>
-                </>
-              )}
-              <dt className="text-zinc-500">Size</dt>
-              <dd className="tabular-nums">{formatSize(file.size)}</dd>
-              {file.width && (
-                <>
-                  <dt className="text-zinc-500">Resolution</dt>
-                  <dd className="tabular-nums">
-                    {file.width} × {file.height}
-                  </dd>
-                </>
-              )}
-              {file.duration > 0 && (
-                <>
-                  <dt className="text-zinc-500">Length</dt>
-                  <dd className="tabular-nums">{formatDuration(file.duration)}</dd>
-                </>
-              )}
-              <dt className="text-zinc-500">Added</dt>
-              <dd>{formatDateTime(file.modified)}</dd>
-            </dl>
-          </aside>
-        )}
+
       </div>
+
+      {showInfo && <Properties file={file} onClose={() => setShowInfo(false)} />}
     </div>
   );
 }

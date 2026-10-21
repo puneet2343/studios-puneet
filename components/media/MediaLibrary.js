@@ -24,11 +24,12 @@ import {
 import MediaTile from "@/components/media/MediaTile";
 import UploadPanel from "@/components/media/UploadPanel";
 import TrimEditor from "@/components/media/TrimEditor";
+import RotateEditor from "@/components/media/RotateEditor";
 import { TripSuggestions, dismissTrip, readDismissed } from "@/components/media/Trips";
 import Viewer from "@/components/media/Viewer";
 import useUploader from "@/components/media/useUploader";
 import useBackClose from "@/components/useBackClose";
-import { actionUrl, downloadUrl, joinPath } from "@/components/media/urls";
+import { actionUrl, downloadUrl, joinPath, zipFilesUrl } from "@/components/media/urls";
 import {
   BackLevel,
   Breadcrumbs,
@@ -86,6 +87,7 @@ export default function MediaLibrary() {
   const [deleting, setDeleting] = useState(null);
   const [moving, setMoving] = useState(null); // paths being moved
   const [trimming, setTrimming] = useState(null); // video file open in the trim editor
+  const [rotating, setRotating] = useState(null); // video file open in the rotate editor
   const [now, setNow] = useState(0);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -492,15 +494,12 @@ export default function MediaLibrary() {
 
   function downloadSelected() {
     const chosen = visible.filter((f) => selected.has(f.path));
-    chosen.forEach((f, i) =>
-      setTimeout(() => {
-        const a = document.createElement("a");
-        a.href = downloadUrl(f);
-        a.download = f.name;
-        a.click();
-      }, i * 400)
-    );
-    toast(`Downloading ${chosen.length} item${chosen.length > 1 ? "s" : ""}`);
+    // One file downloads as itself; several come as a single ZIP.
+    const a = document.createElement("a");
+    a.href = chosen.length === 1 ? downloadUrl(chosen[0]) : zipFilesUrl(chosen.map((f) => f.path));
+    a.download = chosen.length === 1 ? chosen[0].name : "";
+    a.click();
+    toast(chosen.length === 1 ? "Downloading" : `Downloading ${chosen.length} items as one ZIP`);
     setSelected(new Set());
   }
 
@@ -510,7 +509,7 @@ export default function MediaLibrary() {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col">
       <PullToRefresh
-        disabled={selecting || Boolean(openPath) || Boolean(trimming)}
+        disabled={selecting || Boolean(openPath) || Boolean(trimming) || Boolean(rotating)}
         onRefresh={async () => {
           await Promise.all([refreshAll(), dir ? null : loadTrips()]);
           haptic("success");
@@ -796,7 +795,7 @@ export default function MediaLibrary() {
         onClear={uploader.clearFinished}
       />
 
-      {openFile && !trimming && (
+      {openFile && !trimming && !rotating && (
         <Viewer
           file={openFile}
           prev={visible[openIndex - 1] ?? null}
@@ -806,7 +805,23 @@ export default function MediaLibrary() {
           onRename={setRenaming}
           onDelete={remove}
           onTrim={setTrimming}
+          onRotate={setRotating}
           onFavorite={setFavorite}
+        />
+      )}
+
+      {rotating && (
+        <RotateEditor
+          file={rotating}
+          onClose={() => setRotating(null)}
+          onSaved={async ({ path, replaced }) => {
+            setRotating(null);
+            await refreshAll();
+            setOpenPath(path);
+            toast(replaced ? "Rotated. The original is in the Recycle Bin for 3 days." : `Saved "${baseOf(path)}"`, {
+              duration: replaced ? 7000 : 5000,
+            });
+          }}
         />
       )}
 
