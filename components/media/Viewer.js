@@ -6,11 +6,14 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DiamondIcon,
+  DotsIcon,
   DownloadIcon,
   FileIcon,
   InfoIcon,
   PencilIcon,
   ScissorsIcon,
+  StarFilledIcon,
+  StarIcon,
   TrashIcon,
 } from "@/components/icons";
 import VideoPlayer from "@/components/media/VideoPlayer";
@@ -85,8 +88,9 @@ function Stage({ file, onControls }) {
   );
 }
 
-export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim }) {
+export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim, onFavorite }) {
   const [showInfo, setShowInfo] = useState(false);
+  const [more, setMore] = useState(false);
   const [chrome, setChrome] = useState(true); // tap the photo to hide/show controls
   const [drag, setDrag] = useState(null); // { dx, dy } while a finger is down
   const [enterFrom, setEnterFrom] = useState(null); // slide direction for the next file
@@ -94,7 +98,7 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
 
   function go(target, from) {
     setEnterFrom(from);
-    onNavigate(target.name);
+    onNavigate(target.path);
   }
 
   useEffect(() => {
@@ -103,15 +107,15 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
       if (e.key === "Escape") onClose();
       else if (e.key === "ArrowLeft" && prev) {
         setEnterFrom("left");
-        onNavigate(prev.name);
+        onNavigate(prev.path);
       } else if (e.key === "ArrowRight" && next) {
         setEnterFrom("right");
-        onNavigate(next.name);
-      } else if (e.key === "Delete") onDelete([file.name]);
+        onNavigate(next.path);
+      } else if (e.key === "Delete") onDelete([file.path]);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [file.name, prev, next, onClose, onNavigate, onDelete]);
+  }, [file.path, prev, next, onClose, onNavigate, onDelete]);
 
   // Warm the cache for neighbouring photos so swiping feels instant.
   useEffect(() => {
@@ -197,23 +201,65 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
           </p>
           <p className="truncate text-xs tabular-nums text-zinc-500">{details.join(" · ")}</p>
         </div>
-        <IconButton label="Info" onClick={() => setShowInfo((v) => !v)}>
-          <InfoIcon size={19} />
-        </IconButton>
+        <span className="max-sm:hidden">
+          <IconButton label="Info" onClick={() => setShowInfo((v) => !v)}>
+            <InfoIcon size={19} />
+          </IconButton>
+        </span>
+        {onFavorite && (
+          <IconButton label={file.favorite ? "Remove from favourites" : "Add to favourites"} onClick={() => onFavorite([file], !file.favorite)}>
+            {file.favorite ? <StarFilledIcon size={19} className="text-amber-300" /> : <StarIcon size={19} />}
+          </IconButton>
+        )}
         {file.kind === "video" && onTrim && (
           <IconButton label="Trim" onClick={() => onTrim(file)}>
             <ScissorsIcon size={19} />
           </IconButton>
         )}
-        <IconButton label="Rename" onClick={() => onRename(file)}>
-          <PencilIcon size={18} />
-        </IconButton>
-        <IconButton label="Download" href={downloadUrl(file)} download={file.name}>
-          <DownloadIcon size={19} />
-        </IconButton>
-        <IconButton label="Delete" danger onClick={() => onDelete([file.name])}>
+        <span className="flex max-sm:hidden">
+          <IconButton label="Rename" onClick={() => onRename(file)}>
+            <PencilIcon size={18} />
+          </IconButton>
+          <IconButton label="Download" href={downloadUrl(file)} download={file.name}>
+            <DownloadIcon size={19} />
+          </IconButton>
+        </span>
+        <IconButton label="Delete" danger onClick={() => onDelete([file.path])}>
           <TrashIcon size={19} />
         </IconButton>
+        {/* Phone: the less-used actions live in a menu so the file name stays readable. */}
+        <span className="relative sm:hidden">
+          <IconButton label="More" onClick={() => setMore((m) => !m)}>
+            <DotsIcon size={19} />
+          </IconButton>
+          {more && (
+            <div className="anim-pop absolute right-0 top-11 z-20 w-48 overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
+              {[
+                { label: "Info", icon: InfoIcon, run: () => setShowInfo((v) => !v) },
+                { label: "Rename", icon: PencilIcon, run: () => onRename(file) },
+              ].map(({ label, icon: Icon, run }) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    setMore(false);
+                    run();
+                  }}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-zinc-100 hover:bg-white/5 active:bg-white/5"
+                >
+                  <Icon size={18} className="text-zinc-400" /> {label}
+                </button>
+              ))}
+              <a
+                href={downloadUrl(file)}
+                download={file.name}
+                onClick={() => setMore(false)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-sm text-zinc-100 hover:bg-white/5 active:bg-white/5"
+              >
+                <DownloadIcon size={18} className="text-zinc-400" /> Download to phone
+              </a>
+            </div>
+          )}
+        </span>
       </header>
 
       <div

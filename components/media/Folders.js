@@ -121,7 +121,11 @@ function FolderCardImpl({ folder, onOpen, onMenu }) {
           <span className="truncate">{folder.name}</span>
         </p>
         <p className={`mt-0.5 text-[11px] tabular-nums ${cover ? "text-[#fff]/65" : "text-zinc-500"}`}>
-          {folder.count === 0 ? "Empty" : `${folder.count} item${folder.count === 1 ? "" : "s"}`}
+          {folder.count === undefined
+            ? folder.path.includes("/") ? `in ${folder.path.split("/").slice(0, -1).join(" › ")}` : "Folder"
+            : folder.count === 0
+              ? "Empty"
+              : `${folder.count} item${folder.count === 1 ? "" : "s"}`}
         </p>
       </div>
 

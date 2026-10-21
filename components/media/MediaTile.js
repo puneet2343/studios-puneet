@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useRef, useState } from "react";
-import { CheckIcon, DiamondIcon, FileIcon, ImageIcon, MusicIcon, PlayIcon } from "@/components/icons";
+import { CheckIcon, DiamondIcon, FileIcon, ImageIcon, MusicIcon, PlayIcon, StarFilledIcon } from "@/components/icons";
 import { formatDuration } from "@/lib/format";
 import { thumbUrl } from "@/components/media/urls";
 
@@ -30,7 +30,7 @@ function MediaTile({ file, selected, selecting, onOpen, onToggle }) {
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
       navigator.vibrate?.(10);
-      onToggle(file.name);
+      onToggle(file.path);
     }, LONG_PRESS_MS);
   }
   const cancelPress = () => clearTimeout(pressTimer.current);
@@ -40,8 +40,8 @@ function MediaTile({ file, selected, selecting, onOpen, onToggle }) {
       longPressed.current = false;
       return;
     }
-    if (selecting) onToggle(file.name);
-    else onOpen(file.name);
+    if (selecting) onToggle(file.path);
+    else onOpen(file.path);
   }
 
   return (
@@ -93,6 +93,15 @@ function MediaTile({ file, selected, selecting, onOpen, onToggle }) {
         </div>
       )}
 
+      {file.favorite && (
+        <span
+          title="Favourite"
+          className="pointer-events-none absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/45 text-amber-300 shadow-sm backdrop-blur-sm"
+        >
+          <StarFilledIcon size={11} />
+        </span>
+      )}
+
       {file.instagram && (
         <span
           title="Instagram export"
@@ -113,7 +122,7 @@ function MediaTile({ file, selected, selecting, onOpen, onToggle }) {
         aria-label={selected ? "Deselect" : "Select"}
         onClick={(e) => {
           e.stopPropagation();
-          onToggle(file.name);
+          onToggle(file.path);
         }}
         className={`absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border transition-all duration-150 ${
           selected

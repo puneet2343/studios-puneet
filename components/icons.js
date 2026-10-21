@@ -175,3 +175,9 @@ export const ScissorsIcon = make(
     <path d="M8.8 8.2 20 18M8.8 15.8 20 6" />
   </>
 );
+export const StarIcon = make(<path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />);
+export const StarFilledIcon = ({ size = 18, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="currentColor" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);

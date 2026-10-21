@@ -14,12 +14,15 @@ import {
   SearchIcon,
   SortIcon,
   SelectIcon,
+  StarFilledIcon,
+  StarIcon,
   TrashIcon,
   UploadIcon,
 } from "@/components/icons";
 import MediaTile from "@/components/media/MediaTile";
 import UploadPanel from "@/components/media/UploadPanel";
 import TrimEditor from "@/components/media/TrimEditor";
+import { TripSuggestions, dismissTrip, readDismissed } from "@/components/media/Trips";
 import Viewer from "@/components/media/Viewer";
 import useUploader from "@/components/media/useUploader";
 import useBackClose from "@/components/useBackClose";
@@ -36,13 +39,14 @@ import {
 } from "@/components/media/Folders";
 import { dayLabel, formatSize } from "@/lib/format";
 
-const CACHE_KEY = "ps.media.v1";
+const CACHE_KEY = "ps.media.v2";
 const POLL_MS = 20000;
 const FILTERS = [
   { id: "all", label: "All" },
   { id: "video", label: "Videos" },
   { id: "image", label: "Photos" },
   { id: "audio", label: "Audio" },
+  { id: "favorites", label: "Favourites", icon: StarFilledIcon },
 ];
 const SORTS = {
   newest: { label: "Newest first", compare: (a, b) => b.modified - a.modified, grouped: true },
@@ -86,11 +90,15 @@ export default function MediaLibrary() {
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("newest");
   const [selected, setSelected] = useState(() => new Set());
-  const [openName, setOpenName] = useState(null);
+  const [openPath, setOpenPath] = useState(null);
+  // Search and Favourites look across every folder; their results replace the folder view.
+  const [remote, setRemote] = useState(null); // { files, folders, truncated } or null
+  const [trips, setTrips] = useState([]);
+  const [tripNaming, setTripNaming] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
-  const hidden = useRef(new Set()); // names deleted optimistically, until the server agrees
+  const hidden = useRef(new Set()); // paths deleted optimistically, until the server agrees
   const metaRetry = useRef(null);
   const metaRetries = useRef(0); // capped: files that can't be thumbnailed never get metadata
   const loadRef = useRef(null);
@@ -98,8 +106,8 @@ export default function MediaLibrary() {
 
   const apply = useCallback(
     (data) => {
-      setFiles(data.files.filter((f) => !hidden.current.has(f.name)));
-      setFolders((data.folders ?? []).filter((f) => !hidden.current.has(f.name)));
+      setFiles(data.files.filter((f) => !hidden.current.has(f.path)));
+      setFolders((data.folders ?? []).filter((f) => !hidden.current.has(f.path)));
       setNow(Date.now());
       if (data.disk?.media !== undefined) setStorage(data.disk);
     },
@@ -142,8 +150,9 @@ export default function MediaLibrary() {
     const cached = readCache(dir);
     const first = setTimeout(() => {
       setSelected(new Set());
-      setOpenName(null);
+      setOpenPath(null);
       setQuery("");
+      setFilter((f) => (f === "favorites" ? "all" : f));
       metaRetries.current = 0;
       if (cached?.files) apply(cached);
       else {
@@ -170,7 +179,7 @@ export default function MediaLibrary() {
   const uploadUrl = useCallback((file) => actionUrl(joinPath(dirRef.current, file.name)), []);
   const uploader = useUploader({ onUploaded: load, urlFor: uploadUrl });
   // Phone Back closes the viewer / dialog / selection instead of leaving the app.
-  useBackClose(Boolean(openName), () => setOpenName(null));
+  useBackClose(Boolean(openPath), () => setOpenPath(null));
   useBackClose(Boolean(renaming), () => setRenaming(null));
   useBackClose(selected.size > 0, () => setSelected(new Set()));
   const { enqueue } = uploader;
@@ -201,21 +210,69 @@ export default function MediaLibrary() {
     };
   }, [enqueue]);
 
+  const searching = query.trim() !== "";
+  const favorites = filter === "favorites";
+  const remoteMode = searching || favorites;
+
+  // Library-wide search / favourites, fetched as you type (slightly delayed).
+  const remoteKey = remoteMode ? `${favorites ? "fav=1&" : ""}q=${encodeURIComponent(query.trim())}` : null;
+  const loadRemote = useCallback(async () => {
+    if (!remoteKey) return;
+    const data = await fetch(`/api/search?${remoteKey}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (data) setRemote({ ...data, key: remoteKey });
+  }, [remoteKey]);
+  useEffect(() => {
+    if (!remoteKey) return;
+    const timer = setTimeout(loadRemote, searching ? 250 : 0);
+    return () => clearTimeout(timer);
+  }, [remoteKey, searching, loadRemote]);
+  const remoteReady = remote?.key === remoteKey;
+
+  // Trip suggestions, only on the top level.
+  const loadTrips = useCallback(async () => {
+    const data = await fetch("/api/trips", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (data) {
+      const dismissed = readDismissed();
+      setTrips(data.trips.filter((t) => !dismissed.has(t.id)));
+    }
+  }, []);
+  useEffect(() => {
+    if (dir) return;
+    const timer = setTimeout(loadTrips, 600);
+    return () => clearTimeout(timer);
+  }, [dir, loadTrips, files?.length]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([load(), remoteKey ? loadRemote() : null]);
+  }, [load, loadRemote, remoteKey]);
+
   const visibleFolders = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (filter !== "all") return [];
-    return folders.filter((f) => !q || f.name.toLowerCase().includes(q));
-  }, [folders, query, filter]);
+    if (remoteMode) return remoteReady && !favorites ? remote.folders : [];
+    return filter === "all" ? folders : [];
+  }, [remoteMode, remoteReady, favorites, remote, folders, filter]);
 
   const visible = useMemo(() => {
-    if (!files) return [];
-    const q = query.trim().toLowerCase();
-    return files
-      .filter((f) => (filter === "all" || f.kind === filter) && (!q || f.name.toLowerCase().includes(q)))
+    const source = remoteMode ? (remoteReady ? remote.files : []) : files ?? [];
+    return source
+      .filter((f) => filter === "all" || filter === "favorites" || f.kind === filter)
       .sort(SORTS[sort].compare);
-  }, [files, query, filter, sort]);
+  }, [remoteMode, remoteReady, remote, files, filter, sort]);
 
   const groups = useMemo(() => {
+    if (remoteMode) {
+      // Results from many folders: one section per folder.
+      const byFolder = new Map();
+      for (const f of visible) {
+        const folder = f.path.includes("/") ? f.path.split("/").slice(0, -1).join(" › ") : "Media";
+        if (!byFolder.has(folder)) byFolder.set(folder, []);
+        byFolder.get(folder).push(f);
+      }
+      return [...byFolder].map(([label, items]) => ({ label, items }));
+    }
     if (!SORTS[sort].grouped) return [{ label: null, items: visible }];
     const out = [];
     for (const f of visible) {
@@ -224,41 +281,42 @@ export default function MediaLibrary() {
       else out.push({ label, items: [f] });
     }
     return out;
-  }, [visible, sort, now]);
+  }, [visible, sort, now, remoteMode]);
 
   const totalSize = useMemo(() => (files ?? []).reduce((sum, f) => sum + f.size, 0), [files]);
   const selecting = selected.size > 0;
 
-  const toggle = useCallback((name) => {
+  const toggle = useCallback((path) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   }, []);
 
   const remove = useCallback(
-    async (names) => {
-      names.forEach((n) => hidden.current.add(n));
-      setFiles((list) => list?.filter((f) => !names.includes(f.name)));
+    async (paths) => {
+      paths.forEach((p) => hidden.current.add(p));
+      setFiles((list) => list?.filter((f) => !paths.includes(f.path)));
+      setRemote((r) => (r ? { ...r, files: r.files.filter((f) => !paths.includes(f.path)) } : r));
       setSelected(new Set());
-      if (openName && names.includes(openName)) {
-        const idx = visible.findIndex((f) => f.name === openName);
-        const fallback = visible.slice(idx + 1).concat(visible.slice(0, idx).reverse()).find((f) => !names.includes(f.name));
-        setOpenName(names.length === 1 && fallback ? fallback.name : null);
+      if (openPath && paths.includes(openPath)) {
+        const idx = visible.findIndex((f) => f.path === openPath);
+        const fallback = visible.slice(idx + 1).concat(visible.slice(0, idx).reverse()).find((f) => !paths.includes(f.path));
+        setOpenPath(paths.length === 1 && fallback ? fallback.path : null);
       }
 
       const results = await Promise.all(
-        names.map((n) =>
-          fetch(actionUrl(joinPath(dir, n)), { method: "DELETE" })
+        paths.map((p) =>
+          fetch(actionUrl(p), { method: "DELETE" })
             .then(readJson)
             .catch(() => ({ error: "Can't reach the studio PC. Check your connection and try again." }))
         )
       );
       const ids = results.map((r) => r.trashId).filter(Boolean);
-      names.forEach((n) => hidden.current.delete(n));
-      load();
+      paths.forEach((p) => hidden.current.delete(p));
+      refreshAll();
 
       // The server explains why (usually: the file is open in DaVinci on the PC).
       const failed = results.filter((r) => !r.trashId);
@@ -275,13 +333,35 @@ export default function MediaLibrary() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ids }),
             });
-            await load();
+            await refreshAll();
             toast(ids.length === 1 ? "Restored" : `Restored ${ids.length} items`);
           },
         },
       });
     },
-    [dir, load, openName, toast, visible]
+    [refreshAll, openPath, toast, visible]
+  );
+
+  // ----- Favourites -----
+  // Optimistic: the star changes at once, then the PC is told.
+  const setFavorite = useCallback(
+    async (list, on) => {
+      const keys = new Set(list.map((f) => f.key));
+      const mark = (arr) => arr?.map((f) => (keys.has(f.key) ? { ...f, favorite: on || undefined } : f));
+      setFiles(mark);
+      setRemote((r) => (r ? { ...r, files: favorites && !on ? r.files.filter((f) => !keys.has(f.key)) : mark(r.files) } : r));
+      const res = await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys: [...keys], on }),
+      }).catch(() => null);
+      if (!res?.ok) {
+        toast("Couldn't update favourites. Check the connection.");
+        return refreshAll();
+      }
+      toast(on ? (list.length === 1 ? "Added to favourites" : `Added ${list.length} to favourites`) : "Removed from favourites");
+    },
+    [favorites, refreshAll, toast]
   );
 
   // ----- Folders -----
@@ -348,7 +428,7 @@ export default function MediaLibrary() {
     );
     setMoving(null);
     setSelected(new Set());
-    await load();
+    await refreshAll();
     const moved = results.filter((r) => r.ok).length;
     const failed = results.find((r) => !r.ok);
     if (!moved) return toast(failed?.error || "Couldn't move", { duration: 9000 });
@@ -360,8 +440,25 @@ export default function MediaLibrary() {
     });
   }
 
+  async function createTrip(trip, name) {
+    const res = await fetch("/api/trips", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, paths: trip.paths }),
+    }).catch(() => null);
+    const data = res ? await readJson(res) : { error: "Can't reach the studio PC." };
+    if (!res?.ok) return data.error || "Couldn't create the folder";
+    setTripNaming(null);
+    await Promise.all([load(), loadTrips()]);
+    const failed = data.failed?.length ? ` (${data.failed.length} were open in another program and stayed)` : "";
+    toast(`Moved ${data.moved} items to "${name}"${failed}`, {
+      duration: failed ? 9000 : 6000,
+      action: { label: "Open", onClick: () => setDir(data.path) },
+    });
+  }
+
   function downloadSelected() {
-    const chosen = (files ?? []).filter((f) => selected.has(f.name));
+    const chosen = visible.filter((f) => selected.has(f.path));
     chosen.forEach((f, i) =>
       setTimeout(() => {
         const a = document.createElement("a");
@@ -374,7 +471,7 @@ export default function MediaLibrary() {
     setSelected(new Set());
   }
 
-  const openIndex = visible.findIndex((f) => f.name === openName);
+  const openIndex = visible.findIndex((f) => f.path === openPath);
   const openFile = openIndex >= 0 ? visible[openIndex] : null;
 
   return (
@@ -389,7 +486,7 @@ export default function MediaLibrary() {
             <CloseIcon size={20} />
           </button>
           <span className="mr-auto whitespace-nowrap pl-1 text-[15px] font-medium tabular-nums text-zinc-100">{selected.size} selected</span>
-          <Button variant="ghost" onClick={() => setSelected(new Set(visible.map((f) => f.name)))} className="whitespace-nowrap max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
+          <Button variant="ghost" onClick={() => setSelected(new Set(visible.map((f) => f.path)))} className="whitespace-nowrap max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
             <span className="sm:hidden">All</span>
             <span className="max-sm:hidden">Select all</span>
           </Button>
@@ -397,7 +494,24 @@ export default function MediaLibrary() {
             <DownloadIcon size={18} />
             <span className="max-sm:hidden">Download</span>
           </Button>
-          <Button variant="ghost" onClick={() => setMoving([...selected].map((n) => joinPath(dir, n)))} aria-label="Move" className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              const chosen = visible.filter((f) => selected.has(f.path));
+              setFavorite(chosen, !chosen.every((f) => f.favorite));
+              setSelected(new Set());
+            }}
+            aria-label="Favourite"
+            className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5"
+          >
+            {visible.filter((f) => selected.has(f.path)).every((f) => f.favorite) ? (
+              <StarFilledIcon size={18} className="text-amber-300" />
+            ) : (
+              <StarIcon size={18} />
+            )}
+            <span className="max-sm:hidden">Favourite</span>
+          </Button>
+          <Button variant="ghost" onClick={() => setMoving([...selected])} aria-label="Move" className="max-sm:h-11 max-sm:min-w-11 max-sm:px-2.5">
             <MoveIcon size={18} />
             <span className="max-sm:hidden">Move</span>
           </Button>
@@ -425,7 +539,11 @@ export default function MediaLibrary() {
               {dir ? baseOf(dir) : "Media"}
             </h1>
             <p className={`mt-1 text-sm tabular-nums text-zinc-500 ${dir ? "" : "max-lg:mt-0"}`}>
-              {files
+              {remoteMode
+                ? !remoteReady
+                  ? "Searching all folders…"
+                  : `${visible.length.toLocaleString()} ${favorites ? "favourite" : "result"}${visible.length === 1 ? "" : "s"} from all folders${remote.truncated ? " (showing the first 500)" : ""}`
+                : files
                 ? [
                     folders.length > 0 && `${folders.length} folder${folders.length === 1 ? "" : "s"}`,
                     `${files.length.toLocaleString()} item${files.length === 1 ? "" : "s"}`,
@@ -463,77 +581,81 @@ export default function MediaLibrary() {
           />
         </div>
 
+        {/* Phone: search, sort and new folder share a row; the filter tabs get a full-width row. */}
         <div className="mt-3 flex flex-col gap-2.5 md:flex-row md:items-center lg:mt-5">
-          <label className="relative flex-1 md:max-w-sm">
-            <SearchIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search your media"
-              className="w-full rounded-xl border border-white/[0.07] bg-white/[0.03] py-2.5 pl-9 pr-9 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-violet-400/50 focus:bg-white/[0.05]"
-            />
-            {query && (
-              <button
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-zinc-500 hover:text-zinc-200"
-              >
-                <CloseIcon size={15} />
-              </button>
-            )}
-          </label>
-
-          <div className="flex items-center gap-2">
-            <div className="no-scrollbar flex flex-1 overflow-x-auto rounded-xl border border-white/[0.07] bg-white/[0.02] p-1 md:flex-none">
-              {FILTERS.map((f) => (
+          <div className="flex items-center gap-2 md:contents">
+            <label className="relative min-w-0 flex-1 md:max-w-sm">
+              <SearchIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search all folders"
+                className="w-full rounded-xl border border-white/[0.07] bg-white/[0.03] py-2.5 pl-9 pr-9 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-violet-400/50 focus:bg-white/[0.05]"
+              />
+              {query && (
                 <button
-                  key={f.id}
-                  onClick={() => setFilter(f.id)}
-                  className={`flex-1 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors sm:px-3.5 md:flex-none ${
-                    filter === f.id ? "bg-white/[0.09] text-zinc-50" : "text-zinc-500 hover:text-zinc-200"
-                  }`}
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded-lg p-2.5 text-zinc-500 hover:text-zinc-200"
                 >
-                  {f.label}
+                  <CloseIcon size={15} />
                 </button>
-              ))}
-            </div>
-
-            <label className="relative shrink-0">
-              <SortIcon size={18} className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-zinc-400 md:hidden" />
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                aria-label="Sort"
-                className="h-11 w-11 appearance-none rounded-xl border border-white/[0.07] bg-white/[0.02] py-2 text-sm text-transparent outline-none transition-colors focus:border-violet-400/50 md:w-auto md:pl-3 md:pr-8 md:text-zinc-300 md:hover:text-zinc-100"
-              >
-                {Object.entries(SORTS).map(([id, s]) => (
-                  <option key={id} value={id} className="bg-zinc-900">
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDownIcon size={15} className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 text-zinc-500 md:block" />
+              )}
             </label>
 
-            <button
-              onClick={() => setNaming({})}
-              aria-label="New folder"
-              title="New folder"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.02] text-zinc-400 transition-colors hover:text-zinc-100 lg:hidden"
-            >
-              <FolderPlusIcon size={18} />
-            </button>
+            <div className="flex shrink-0 items-center gap-2 md:order-last">
+              <label className="relative shrink-0">
+                <SortIcon size={18} className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-zinc-400 md:hidden" />
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  aria-label="Sort"
+                  className="h-11 w-11 appearance-none rounded-xl border border-white/[0.07] bg-white/[0.02] py-2 text-sm text-transparent outline-none transition-colors focus:border-violet-400/50 md:w-auto md:pl-3 md:pr-8 md:text-zinc-300 md:hover:text-zinc-100"
+                >
+                  {Object.entries(SORTS).map(([id, s]) => (
+                    <option key={id} value={id} className="bg-zinc-900">
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDownIcon size={15} className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 text-zinc-500 md:block" />
+              </label>
 
-            {files?.length > 0 && (
               <button
-                onClick={() => visible[0] && toggle(visible[0].name)}
-                aria-label="Select"
-                title="Select"
-                className="hidden rounded-xl border border-white/[0.07] bg-white/[0.02] p-2 text-zinc-400 transition-colors hover:text-zinc-100 sm:block"
+                onClick={() => setNaming({})}
+                aria-label="New folder"
+                title="New folder"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.02] text-zinc-400 transition-colors hover:text-zinc-100 lg:hidden"
               >
-                <SelectIcon size={18} />
+                <FolderPlusIcon size={18} />
               </button>
-            )}
+
+              {files?.length > 0 && (
+                <button
+                  onClick={() => visible[0] && toggle(visible[0].path)}
+                  aria-label="Select"
+                  title="Select"
+                  className="hidden rounded-xl border border-white/[0.07] bg-white/[0.02] p-2 text-zinc-400 transition-colors hover:text-zinc-100 sm:block"
+                >
+                  <SelectIcon size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="no-scrollbar flex overflow-x-auto rounded-xl border border-white/[0.07] bg-white/[0.02] p-1 md:flex-none">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={`flex-1 whitespace-nowrap rounded-lg px-2 py-2 text-sm transition-colors sm:px-3.5 md:flex-none ${
+                  filter === f.id ? "bg-white/[0.09] text-zinc-50" : "text-zinc-500 hover:text-zinc-200"
+                }`}
+              >
+                {f.icon && <f.icon size={13} className={`mr-1 inline -translate-y-px ${filter === f.id ? "text-amber-300" : ""}`} />}
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
@@ -545,6 +667,16 @@ export default function MediaLibrary() {
       )}
 
       <main className="flex-1 px-0.5 pb-28 sm:px-6">
+        {!dir && !remoteMode && filter === "all" && (
+          <TripSuggestions
+            trips={trips}
+            onCreate={setTripNaming}
+            onDismiss={(trip) => {
+              dismissTrip(trip.id);
+              setTrips((list) => list.filter((t) => t.id !== trip.id));
+            }}
+          />
+        )}
         {visibleFolders.length > 0 && (
           <section className="anim-fade mb-6 px-3 sm:px-0">
             <h2 className="mb-2.5 flex items-baseline gap-2 px-0.5 text-sm font-medium text-zinc-200 sm:px-0">
@@ -553,12 +685,12 @@ export default function MediaLibrary() {
             </h2>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {visibleFolders.map((f) => (
-                <FolderCard key={f.path} folder={f} onOpen={setDir} onMenu={setFolderMenu} />
+                <FolderCard key={f.path} folder={f} onOpen={setDir} onMenu={remoteMode ? () => setDir(f.path) : setFolderMenu} />
               ))}
             </div>
           </section>
         )}
-        {files === null ? (
+        {(remoteMode ? !remoteReady : files === null) ? (
           <div className="grid grid-cols-3 gap-0.5 sm:grid-cols-4 sm:gap-1.5 md:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
             {Array.from({ length: 21 }, (_, i) => (
               <div key={i} className="skeleton aspect-square" />
@@ -567,7 +699,8 @@ export default function MediaLibrary() {
         ) : visible.length === 0 ? (
           visibleFolders.length > 0 ? null : (
             <EmptyState
-              searching={files.length + folders.length > 0}
+              searching={remoteMode || files.length + folders.length > 0}
+              favorites={favorites && !searching}
               inFolder={Boolean(dir)}
               onUpload={() => inputRef.current?.click()}
               onNewFolder={() => setNaming({})}
@@ -585,11 +718,11 @@ export default function MediaLibrary() {
               <div className="grid grid-cols-3 gap-0.5 sm:grid-cols-4 sm:gap-1.5 md:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 sm:[&>*]:rounded-lg">
                 {group.items.map((f) => (
                   <MediaTile
-                    key={f.name}
+                    key={f.path}
                     file={f}
-                    selected={selected.has(f.name)}
+                    selected={selected.has(f.path)}
                     selecting={selecting}
-                    onOpen={setOpenName}
+                    onOpen={setOpenPath}
                     onToggle={toggle}
                   />
                 ))}
@@ -624,11 +757,12 @@ export default function MediaLibrary() {
           file={openFile}
           prev={visible[openIndex - 1] ?? null}
           next={visible[openIndex + 1] ?? null}
-          onClose={() => setOpenName(null)}
-          onNavigate={setOpenName}
+          onClose={() => setOpenPath(null)}
+          onNavigate={setOpenPath}
           onRename={setRenaming}
           onDelete={remove}
           onTrim={setTrimming}
+          onFavorite={setFavorite}
         />
       )}
 
@@ -638,8 +772,8 @@ export default function MediaLibrary() {
           onClose={() => setTrimming(null)}
           onSaved={async ({ path, replaced }) => {
             setTrimming(null);
-            await load();
-            setOpenName(baseOf(path));
+            await refreshAll();
+            setOpenPath(path);
             toast(replaced ? "Trimmed. The original is in the PC recycle folder for 3 days." : `Saved "${baseOf(path)}"`, {
               duration: replaced ? 7000 : 5000,
             });
@@ -663,6 +797,16 @@ export default function MediaLibrary() {
             setDeleting(folderMenu);
             setFolderMenu(null);
           }}
+        />
+      )}
+
+      {tripNaming && (
+        <NameDialog
+          title="Name this trip folder"
+          action={`Create & move ${tripNaming.count}`}
+          initial={tripNaming.name}
+          onClose={() => setTripNaming(null)}
+          submit={(name) => createTrip(tripNaming, name)}
         />
       )}
 
@@ -696,10 +840,10 @@ export default function MediaLibrary() {
         <RenameDialog
           file={renaming}
           onClose={() => setRenaming(null)}
-          onDone={async (name) => {
+          onDone={async (path) => {
             setRenaming(null);
-            if (openName === renaming.name) setOpenName(name);
-            await load();
+            if (openPath === renaming.path) setOpenPath(path);
+            await refreshAll();
             toast("Renamed");
           }}
         />
@@ -718,18 +862,20 @@ export default function MediaLibrary() {
   );
 }
 
-function EmptyState({ searching, inFolder, onUpload, onNewFolder }) {
+function EmptyState({ searching, favorites, inFolder, onUpload, onNewFolder }) {
   return (
     <div className="anim-rise flex flex-col items-center px-6 py-20 text-center">
       <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.03] text-zinc-400">
-        {searching ? <SearchIcon size={26} /> : <MediaIcon size={28} />}
+        {favorites ? <StarIcon size={26} /> : searching ? <SearchIcon size={26} /> : <MediaIcon size={28} />}
       </div>
       <p className="text-lg font-medium text-zinc-100">
-        {searching ? "Nothing matches" : inFolder ? "This folder is empty" : "Your library is empty"}
+        {favorites ? "No favourites yet" : searching ? "Nothing matches" : inFolder ? "This folder is empty" : "Your library is empty"}
       </p>
       <p className="mt-1.5 max-w-sm text-sm text-zinc-500">
-        {searching
-          ? "Try a different name or filter."
+        {favorites
+          ? "Open a photo or video and tap the ☆ star to keep your best shots here."
+          : searching
+          ? "Nothing in any folder matches that name."
           : inFolder
             ? "Upload here, make a subfolder, or move media in from another folder."
             : "Upload videos and photos from your phone. They're stored on the studio PC, not your phone."}
@@ -768,7 +914,7 @@ function RenameDialog({ file, onClose, onDone }) {
     const data = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) return setError(data.error || "Couldn't rename");
-    onDone(data.name);
+    onDone(data.path);
   }
 
   return (
