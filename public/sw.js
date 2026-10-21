@@ -53,3 +53,32 @@ async function asset(request) {
   if (response.ok) cache.put(request, response.clone());
   return response;
 }
+
+// Storage alerts from the studio PC (lib/storage-alerts.js).
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {}
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Puneet Studios", {
+      body: data.body || "",
+      icon: "/icon-192.png?v=3",
+      badge: "/icon-192.png?v=3",
+      tag: data.tag || "puneet-studios",
+      data: { url: data.url || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (open) return open.focus();
+      return self.clients.openWindow(url);
+    })
+  );
+});

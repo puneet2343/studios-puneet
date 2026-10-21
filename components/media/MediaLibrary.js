@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/AppShell";
 import PullToRefresh from "@/components/PullToRefresh";
+import { StorageBanner } from "@/components/StorageAlerts";
+import { UPLOAD_RESERVE } from "@/lib/storage-levels";
 import { haptic } from "@/lib/haptics";
 import Dialog, { Button } from "@/components/Dialog";
 import { useToast } from "@/components/Toaster";
@@ -81,6 +83,7 @@ export default function MediaLibrary() {
   const toast = useToast();
   const [dir, setDir] = useState(""); // current folder, "" = top level
   const [files, setFiles] = useState(null);
+  const [disk, setDisk] = useState(null);
   const [folders, setFolders] = useState([]);
   const [folderMenu, setFolderMenu] = useState(null);
   const [naming, setNaming] = useState(null); // { folder } to rename one, {} for a new folder
@@ -113,7 +116,10 @@ export default function MediaLibrary() {
       setFiles(data.files.filter((f) => !hidden.current.has(f.path)));
       setFolders((data.folders ?? []).filter((f) => !hidden.current.has(f.path)));
       setNow(Date.now());
-      if (data.disk?.media !== undefined) setStorage(data.disk);
+      if (data.disk?.media !== undefined) {
+        setStorage(data.disk);
+        setDisk(data.disk);
+      }
     },
     [setStorage]
   );
@@ -188,6 +194,25 @@ export default function MediaLibrary() {
   useBackClose(selected.size > 0, () => setSelected(new Set()));
   const { enqueue } = uploader;
 
+  // Check the picked files fit on the PC before spending time uploading them.
+  const addFiles = useCallback(
+    (list) => {
+      const picked = Array.from(list ?? []);
+      const total = picked.reduce((sum, f) => sum + f.size, 0);
+      const usable = disk ? disk.free - UPLOAD_RESERVE : Infinity;
+      if (picked.length && total > usable) {
+        haptic("warn");
+        toast(
+          `Not enough space on the studio PC: you picked ${formatSize(total)} but only ${formatSize(Math.max(0, usable))} is free. Empty the Recycle Bin or remove duplicates first.`,
+          { duration: 10000 }
+        );
+        return;
+      }
+      enqueue(picked);
+    },
+    [disk, enqueue, toast]
+  );
+
   // Drag-and-drop anywhere on the page (desktop).
   useEffect(() => {
     let depth = 0;
@@ -200,7 +225,7 @@ export default function MediaLibrary() {
       e.preventDefault();
       depth = 0;
       setDragging(false);
-      enqueue(e.dataTransfer.files);
+      addFiles(e.dataTransfer.files);
     };
     window.addEventListener("dragenter", enter);
     window.addEventListener("dragleave", leave);
@@ -212,7 +237,7 @@ export default function MediaLibrary() {
       window.removeEventListener("dragover", over);
       window.removeEventListener("drop", drop);
     };
-  }, [enqueue]);
+  }, [addFiles]);
 
   const searching = query.trim() !== "";
   const favorites = filter === "favorites";
@@ -617,7 +642,7 @@ export default function MediaLibrary() {
             accept="video/*,image/*,audio/*"
             className="hidden"
             onChange={(e) => {
-              uploader.enqueue(e.target.files);
+              addFiles(e.target.files);
               e.target.value = "";
             }}
           />
@@ -701,6 +726,8 @@ export default function MediaLibrary() {
           </div>
         </div>
       </header>
+
+      <StorageBanner disk={disk} />
 
       {error && (
         <p className="anim-fade mx-4 mb-4 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-2.5 text-sm text-amber-200 sm:mx-6">

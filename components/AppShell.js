@@ -28,6 +28,8 @@ import {
 import { setThemePreference, useThemePreference } from "@/components/theme";
 import useBackClose from "@/components/useBackClose";
 import { formatSize } from "@/lib/format";
+import { storageLevel } from "@/lib/storage-levels";
+import { StorageAlertsSwitch } from "@/components/StorageAlerts";
 
 // Add new features here: a live item needs an href; items without one show as "Soon".
 // `tab: true` also puts it in the phone's bottom tab bar.
@@ -418,6 +420,7 @@ export default function AppShell({ children }) {
                   <>
                     <p className="mb-2 mt-5 px-1 text-xs font-medium uppercase tracking-[0.06em] text-zinc-500">Storage</p>
                     <StorageMeter storage={storage} />
+                    <StorageAlertsSwitch />
                   </>
                 )}
                 <button
@@ -545,6 +548,7 @@ function ThemeSwitch({ large = false }) {
 function StorageMeter({ storage }) {
   const used = storage.total - storage.free;
   const pct = Math.min(100, (used / storage.total) * 100);
+  const level = storageLevel(storage);
   return (
     <div className="mb-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
       <div className="mb-2 flex items-center gap-2 text-xs text-zinc-400">
@@ -554,7 +558,7 @@ function StorageMeter({ storage }) {
       </div>
       <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
         <div
-          className={`h-full rounded-full transition-[width] duration-700 ${pct > 90 ? "bg-red-400" : "bg-gradient-to-r from-violet-400 to-sky-400"}`}
+          className={`h-full rounded-full transition-[width] duration-700 ${level === "critical" ? "bg-red-400" : level === "low" ? "bg-amber-400" : "bg-gradient-to-r from-violet-400 to-sky-400"}`}
           style={{ width: `${pct}%` }}
         />
       </div>

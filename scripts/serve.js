@@ -19,7 +19,7 @@ const ROOT = path.resolve(__dirname, "..");
 const NEXT = path.join(ROOT, "node_modules", "next", "dist", "bin", "next");
 const SLOTS = [".next", ".next-b"];
 const WATCH_DIRS = ["app", "components", "lib", "public"];
-const WATCH_FILES = ["next.config.mjs", "package.json", ".env.local"];
+const WATCH_FILES = ["next.config.mjs", "package.json", ".env.local", "instrumentation.js"];
 const LOG = path.join(__dirname, "serve.log");
 const APP_LOG = path.join(__dirname, "app.log");
 

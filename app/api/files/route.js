@@ -3,6 +3,8 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import { isAuthed, unauthorized } from "@/lib/auth";
+import { formatSize } from "@/lib/format";
+import { UPLOAD_RESERVE } from "@/lib/storage-levels";
 import {
   cleanName,
   cleanPath,
@@ -116,6 +118,15 @@ export async function PUT(request) {
   const name = path.basename(full);
   // The folder may have been deleted from another device while this was queued.
   if (!(await isFolder(dir))) return Response.json({ error: "That folder no longer exists" }, { status: 404 });
+  // Never fill the disk completely: Windows and DaVinci need room to work.
+  const incoming = Number(request.headers.get("content-length")) || 0;
+  const { free } = await diskSpace();
+  if (incoming && incoming > free - UPLOAD_RESERVE) {
+    return Response.json(
+      { error: `Not enough space on the studio PC: this file is ${formatSize(incoming)} but only ${formatSize(Math.max(0, free - UPLOAD_RESERVE))} can be used.` },
+      { status: 507 }
+    );
+  }
   const temp = tempPathFor(name, dir);
   try {
     await pipeline(Readable.fromWeb(request.body), createWriteStream(temp));
