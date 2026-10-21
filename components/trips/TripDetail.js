@@ -14,7 +14,7 @@ import ItemSheet from "@/components/trips/ItemSheet";
 import MoneyTab from "@/components/trips/MoneyTab";
 import PlanTab, { ItemRow } from "@/components/trips/PlanTab";
 import TripForm from "@/components/trips/TripForm";
-import { categoryForItem, daysBetween, fmtRange, itemTitle, money, today, totals, tripDays, tripStatus, uid } from "@/components/trips/tripUtils";
+import { categoryForItem, daysBetween, fmtRange, itemTitle, itemsForDay, money, today, totals, tripDays, tripStatus, uid } from "@/components/trips/tripUtils";
 import useTrip, { dropTripCache } from "@/components/trips/useTrip";
 import { haptic } from "@/lib/haptics";
 
@@ -61,10 +61,15 @@ function Stat({ icon, label, value, sub, tone = "", onClick }) {
   );
 }
 
-function Overview({ trip, update, onOpenItem, onTab }) {
+function Overview({ trip, update, onOpenItem, onTab, onToggleDone }) {
   const router = useRouter();
   const st = tripStatus(trip);
-  const { spent, planned } = totals(trip);
+  const { spent, planned, byDay } = totals(trip);
+  const live = st.tone === "live";
+  const t = today();
+  const todayItems = live ? itemsForDay(trip, t) : [];
+  const spentToday = byDay[t] ?? 0;
+  const todayCount = trip.expenses.filter((e) => e.date === t).length;
   const days = tripDays(trip);
   const bookings = trip.items.filter((i) => i.type === "transport" || i.type === "stay");
   const toBook = bookings.filter((i) => i.status === "tobook").length;
@@ -73,7 +78,7 @@ function Overview({ trip, update, onOpenItem, onTab }) {
   const [notes, setNotes] = useState(trip.notes);
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-4 pb-24">
       <div className="relative overflow-hidden rounded-3xl border border-white/[0.07]">
         {trip.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -90,7 +95,34 @@ function Overview({ trip, update, onOpenItem, onTab }) {
         </div>
       </div>
 
-      {next && (
+      {live && (
+        <div>
+          <p className="mb-1.5 flex justify-between px-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+            <span>Today · {st.label}</span>
+          </p>
+          <button onClick={() => onTab("money")} className="mb-2 flex w-full items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-3 text-left active:bg-white/[0.05]">
+            <span className="flex items-center gap-2 text-sm text-zinc-300">
+              <WalletIcon size={16} className="text-zinc-500" />
+              Spent today
+            </span>
+            <span className="text-right">
+              <span className="block text-base font-semibold tabular-nums text-zinc-100">{money(spentToday, trip.currency)}</span>
+              <span className="block text-xs text-zinc-500">{todayCount ? `${todayCount} expense${todayCount === 1 ? "" : "s"}` : "Nothing logged yet"}</span>
+            </span>
+          </button>
+          {todayItems.length ? (
+            <ul className="space-y-1.5">
+              {todayItems.map(({ item, role }) => (
+                <ItemRow key={`${item.id}-${role}`} trip={trip} item={item} role={role} onOpen={onOpenItem} onToggleDone={onToggleDone} compact />
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-center text-sm text-zinc-500">Nothing planned for today — a free day.</p>
+          )}
+        </div>
+      )}
+
+      {next && !(live && next.day === t) && (
         <div>
           <p className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Next up · {next.day === today() ? "today" : `in ${daysBetween(today(), next.day)} day${daysBetween(today(), next.day) === 1 ? "" : "s"}`}</p>
           <ul>
@@ -199,6 +231,7 @@ export default function TripDetail({ id, onBack, onDeleted }) {
   function saveItem(it) {
     setItemSheet(null);
     haptic("tap");
+    if (it.paid && it.status === "tobook") it = { ...it, status: "booked" };
     update((t) => {
       const exists = t.items.some((i) => i.id === it.id);
       const items = exists ? t.items.map((i) => (i.id === it.id ? it : i)) : [...t.items, it];
@@ -224,7 +257,13 @@ export default function TripDetail({ id, onBack, onDeleted }) {
   function saveExpense(ex) {
     setExpenseSheet(null);
     haptic("tap");
+    const isNew = !trip.expenses.some((e) => e.id === ex.id);
     update((t) => ({ ...t, expenses: t.expenses.some((e) => e.id === ex.id) ? t.expenses.map((e) => (e.id === ex.id ? ex : e)) : [...t.expenses, ex] }));
+    if (isNew) {
+      toast(`Added ${money(ex.amount, trip.currency)} · ${ex.title}`, {
+        action: { label: "Undo", onClick: () => update((t) => ({ ...t, expenses: t.expenses.filter((e) => e.id !== ex.id) })) },
+      });
+    }
   }
 
   function deleteExpense(exId) {
@@ -248,6 +287,9 @@ export default function TripDetail({ id, onBack, onDeleted }) {
     dropTripCache(id);
     onDeleted(trip.name, data.undo);
   }
+
+  const liveTrip = tripStatus(trip).tone === "live";
+  const toggleDone = (item) => (haptic("tick"), update((t) => ({ ...t, items: t.items.map((i) => (i.id === item.id ? { ...i, done: !i.done } : i)) })));
 
   const addItem = (preset) => setItemSheet({ id: uid(), status: "tobook", ...preset, type: preset?.type ?? (preset?.status === "idea" ? "activity" : preset?.day !== undefined ? "activity" : "transport") });
 
@@ -292,17 +334,26 @@ export default function TripDetail({ id, onBack, onDeleted }) {
         </div>
       }
     >
-      {tab === "overview" && <Overview trip={trip} update={update} onOpenItem={setItemSheet} onTab={setTab} />}
-      {tab === "plan" && (
-        <PlanTab trip={trip} onOpen={setItemSheet} onAdd={addItem} onToggleDone={(item) => (haptic("tick"), update((t) => ({ ...t, items: t.items.map((i) => (i.id === item.id ? { ...i, done: !i.done } : i)) })))} />
-      )}
+      {tab === "overview" && <Overview trip={trip} update={update} onOpenItem={setItemSheet} onTab={setTab} onToggleDone={toggleDone} />}
+      {tab === "plan" && <PlanTab trip={trip} onOpen={setItemSheet} onAdd={addItem} onToggleDone={toggleDone} />}
       {tab === "bookings" && (
         <BookingsTab trip={trip} onOpen={setItemSheet} onAdd={addItem} onMarkBooked={(item) => (haptic("success"), update((t) => ({ ...t, items: t.items.map((i) => (i.id === item.id ? { ...i, status: "booked" } : i)) })))} />
       )}
-      {tab === "money" && <MoneyTab trip={trip} onAdd={() => setExpenseSheet({})} onOpen={setExpenseSheet} />}
+      {tab === "money" && <MoneyTab trip={trip} onOpen={setExpenseSheet} />}
       {tab === "checklist" && <ChecklistTab trip={trip} update={update} />}
 
-      {(tab === "plan" || tab === "overview") && (
+      {/* One main action per tab. During the trip, logging spends is what matters most. */}
+      {(tab === "money" || (tab === "overview" && liveTrip)) && (
+        <button
+          onClick={() => setExpenseSheet({})}
+          aria-label="Add expense"
+          className="anim-pop fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-zinc-950 shadow-xl shadow-black/30 transition-transform active:scale-95"
+        >
+          <PlusIcon size={20} strokeWidth={2.4} />
+          Expense
+        </button>
+      )}
+      {(tab === "plan" || (tab === "overview" && !liveTrip)) && (
         <button
           onClick={() => addItem(tab === "plan" ? { day: null } : undefined)}
           aria-label="Add to plan"

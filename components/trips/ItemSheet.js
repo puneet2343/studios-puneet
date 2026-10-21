@@ -7,7 +7,7 @@ import useBackClose from "@/components/useBackClose";
 import { ITEM_TYPES, MODES, STATUSES, fmtDay, tripDays, uid } from "@/components/trips/tripUtils";
 import { Attachments, Field, MoneyInput, Segmented, TextInput, inputClass } from "@/components/trips/ui";
 
-function DayPicker({ trip, value, onChange, allowNone = true, label = "Day" }) {
+function DayPicker({ trip, value, onChange, allowNone = true, label = "Day", noneLabel = "Not decided (ideas)" }) {
   const days = tripDays(trip);
   if (!days.length) {
     return (
@@ -22,7 +22,7 @@ function DayPicker({ trip, value, onChange, allowNone = true, label = "Day" }) {
       <select value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className={inputClass}>
         {allowNone && (
           <option value="" className="bg-zinc-900">
-            Not decided (ideas)
+            {noneLabel}
           </option>
         )}
         {outside && (
@@ -133,7 +133,7 @@ export default function ItemSheet({ trip, item, onClose, onSave, onDelete, onAtt
             <div className="grid grid-cols-2 gap-3">
               <DayPicker trip={trip} value={it.day} onChange={(day) => set({ day })} label="Departs" />
               <TimeInput label="At" value={it.time} onChange={(time) => set({ time })} />
-              <DayPicker trip={trip} value={it.endDay} onChange={(endDay) => set({ endDay })} label="Arrives" />
+              <DayPicker trip={trip} value={it.endDay} onChange={(endDay) => set({ endDay })} label="Arrives" noneLabel="Same day" />
               <TimeInput label="At" value={it.endTime} onChange={(endTime) => set({ endTime })} />
             </div>
             <Field label={it.mode === "flight" ? "Airline & flight no." : it.mode === "train" ? "Train name & no." : "Operator"}>
@@ -218,7 +218,7 @@ export default function ItemSheet({ trip, item, onClose, onSave, onDelete, onAtt
               Paid
               <span className="block text-xs text-zinc-500">Adds it to the trip&apos;s expenses</span>
             </span>
-            <input type="checkbox" checked={it.paid} onChange={(e) => set({ paid: e.target.checked })} className="h-5 w-5 accent-violet-500" />
+            <input type="checkbox" checked={it.paid} onChange={(e) => set(e.target.checked && it.status === "tobook" ? { paid: true, status: "booked" } : { paid: e.target.checked })} className="h-5 w-5 accent-violet-500" />
           </label>
         )}
 

@@ -1,6 +1,7 @@
 // Trip Planner phone walkthrough (headless Edge, Galaxy S25 size): creates a "zz-test" trip,
 // adds a flight, a 3-night stay, an idea, bookings, expenses, checklist, an offline edit, then deletes it.
 // Usage: node scripts/test-trip-planner.js . http://localhost:3000/ <screenshot folder>
+const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
@@ -165,7 +166,7 @@ const day = (n) => { const d = new Date(d0); d.setDate(d.getDate() + n); return 
   // ---- Money ----
   await tabTo("Money");
   check("Paid stay became an expense", (await text()).includes("from plan") && (await text()).includes("9,000"));
-  await tap(btn("Add expense"), 700);
+  await tap(`document.querySelector("button[aria-label='Add expense']")`, 700);
   check("Add expense sheet", (await dialog()) === "Add expense");
   await fill("Amount", "1800");
   await fill("What for", "Dinner at Thalassa");

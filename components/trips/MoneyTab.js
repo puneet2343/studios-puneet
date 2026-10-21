@@ -1,7 +1,7 @@
 "use client";
 
-import { ClipIcon, PlusIcon } from "@/components/icons";
-import { CATEGORIES, METHODS, fmtDay, money, settleUp, totals, tripDays } from "@/components/trips/tripUtils";
+import { ClipIcon } from "@/components/icons";
+import { CATEGORIES, METHODS, addDays, fmtDay, money, settleUp, today, totals, tripDays } from "@/components/trips/tripUtils";
 import { SectionTitle } from "@/components/trips/ui";
 
 function Bar({ value, max, color }) {
@@ -13,7 +13,13 @@ function Bar({ value, max, color }) {
 }
 
 /** Budget, spending breakdowns, who owes whom, and every expense. */
-export default function MoneyTab({ trip, onAdd, onOpen }) {
+function dayLabel(d) {
+  if (d === today()) return `Today · ${fmtDay(d)}`;
+  if (d === addDays(today(), -1)) return `Yesterday · ${fmtDay(d)}`;
+  return fmtDay(d);
+}
+
+export default function MoneyTab({ trip, onOpen }) {
   const c = trip.currency;
   const { planned, spent, byCategory, byDay } = totals(trip);
   const budget = trip.budget;
@@ -21,8 +27,13 @@ export default function MoneyTab({ trip, onAdd, onOpen }) {
   const days = tripDays(trip);
   const daysWithSpend = Object.keys(byDay).length;
   const { balances, payments } = settleUp(trip);
+  // What each person paid vs their fair share, for the settle-up breakdown.
+  const paidBy = {};
+  for (const e of trip.expenses) paidBy[e.paidBy] = (paidBy[e.paidBy] || 0) + e.amount;
+  const r = (n) => money(Math.round(n), c);
   const nameOf = (id) => trip.travellers.find((p) => p.id === id)?.name ?? "Someone";
-  const expensesByDate = [...trip.expenses].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  // Newest day first, and the latest-added on top within a day.
+  const expensesByDate = [...trip.expenses].reverse().sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   const groups = [];
   for (const e of expensesByDate) {
     const key = e.date ?? "No date";
@@ -33,7 +44,7 @@ export default function MoneyTab({ trip, onAdd, onOpen }) {
   const dayMax = Math.max(1, ...Object.values(byDay));
 
   return (
-    <div className="pb-6">
+    <div className="pb-24">
       <section className="rounded-3xl border border-white/[0.07] bg-gradient-to-br from-violet-500/[0.10] to-sky-500/[0.06] p-4">
         <p className="text-xs font-medium text-zinc-400">Spent so far</p>
         <p className="mt-0.5 text-3xl font-semibold tracking-tight tabular-nums text-zinc-50">{money(spent, c)}</p>
@@ -61,10 +72,6 @@ export default function MoneyTab({ trip, onAdd, onOpen }) {
         </div>
       </section>
 
-      <button onClick={() => onAdd()} className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-zinc-950 transition-transform active:scale-[0.98]">
-        <PlusIcon size={16} strokeWidth={2.4} />
-        Add expense
-      </button>
 
       {spent > 0 && (
         <>
@@ -109,26 +116,37 @@ export default function MoneyTab({ trip, onAdd, onOpen }) {
           <SectionTitle>Settle up</SectionTitle>
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3.5">
             {payments.length ? (
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 {payments.map((p, i) => (
                   <li key={i} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-zinc-200">
-                      <b className="font-semibold">{p.from.name}</b> pays <b className="font-semibold">{p.to.name}</b>
+                    <span className="text-zinc-300">
+                      <b className="font-semibold text-zinc-100">{p.from.name}</b> pays <b className="font-semibold text-zinc-100">{p.to.name}</b>
                     </span>
-                    <span className="font-semibold tabular-nums text-violet-300">{money(p.amount, c)}</span>
+                    <span className="font-semibold tabular-nums text-zinc-100">{money(p.amount, c)}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-emerald-300">All square — nobody owes anything.</p>
+              <p className="text-sm text-emerald-300">All settled — nobody owes anything.</p>
             )}
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-white/[0.06] pt-3 text-xs text-zinc-500">
-              {balances.map((b) => (
-                <span key={b.id}>
-                  {b.name}: <span className={b.balance >= 0 ? "text-emerald-300" : "text-red-300"}>{b.balance >= 0 ? "+" : ""}{money(b.balance, c)}</span>
-                </span>
-              ))}
-            </div>
+            <ul className="mt-3 space-y-2 border-t border-white/[0.06] pt-3">
+              {balances.map((b) => {
+                const owed = Math.round(b.balance);
+                return (
+                  <li key={b.id} className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="min-w-0">
+                      <span className="text-zinc-200">{b.name}</span>
+                      <span className="block text-xs text-zinc-500">
+                        Paid {r(paidBy[b.id] ?? 0)} · share {r((paidBy[b.id] ?? 0) - b.balance)}
+                      </span>
+                    </span>
+                    <span className={`shrink-0 text-right text-xs font-medium ${owed > 0 ? "text-emerald-300" : owed < 0 ? "text-red-300" : "text-zinc-500"}`}>
+                      {owed > 0 ? `Gets back ${r(owed)}` : owed < 0 ? `Owes ${r(-owed)}` : "Settled"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </>
       )}
@@ -138,7 +156,7 @@ export default function MoneyTab({ trip, onAdd, onOpen }) {
       {groups.map((g) => (
         <section key={g.key} className="mb-3">
           <p className="mb-1.5 flex justify-between px-0.5 text-xs text-zinc-500">
-            <span>{g.key === "No date" ? g.key : fmtDay(g.key)}</span>
+            <span>{g.key === "No date" ? g.key : dayLabel(g.key)}</span>
             <span className="tabular-nums">{money(g.items.reduce((s, e) => s + e.amount, 0), c)}</span>
           </p>
           <ul className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">

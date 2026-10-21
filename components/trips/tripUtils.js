@@ -148,6 +148,17 @@ export const CATEGORIES = {
   other: { label: "Other", color: "#94a3b8" },
 };
 
+// Category from what the expense is called ("Petrol refill" -> Fuel), so it rarely needs picking.
+const GUESSES = [
+  ["fuel", /petrol|diesel|fuel|refill|\bcng\b/i],
+  ["shopping", /\bshopping|shirt|dress|souvenir|\bgifts?\b|sunglass|\bcap\b|\bhat\b|\bshoes?\b|slippers|clothes|\bbags?\b|sunscreen|toiletr/i],
+  ["food", /breakfast|lunch|dinner|brunch|snack|\bchai\b|\btea\b|coffee|\bcafe|café|restaurant|shack|\bfood|\bmeals?\b|\bdrinks?\b|\bbeers?\b|cocktail|juice|\bwater\b|maggi|momos|pizza|biryani|thali|ice ?cream|\bbar\b|dhaba|\bcola\b/i],
+  ["transport", /\bcab\b|taxi|uber|\bola\b|\bauto\b|rickshaw|\bbus\b|train|flight|metro|\btoll\b|parking|ferry|\bboat\b|scoot(y|er|ies)|bike rent|car rent|rapido/i],
+  ["stay", /hotel|hostel|\bstay\b|\broom\b|airbnb|resort|homestay|villa|check.?in/i],
+  ["activities", /ticket|\bentry\b|\btour\b|safari|cruise|museum|\bfort\b|\bpark\b|\bshow\b|\bclub\b|paraglid|rafting|\bdive\b|diving|snorkel|\btrek|beach bed|\bgames?\b|cover charge/i],
+];
+export const guessCategory = (title) => GUESSES.find(([, re]) => re.test(title))?.[0] ?? null;
+
 export const categoryForItem = (item) => ({ transport: "transport", stay: "stay", food: "food", activity: "activities" })[item.type] ?? "other";
 
 export const METHODS = { upi: "UPI", cash: "Cash", card: "Card", other: "Other" };

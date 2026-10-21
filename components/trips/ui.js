@@ -44,15 +44,17 @@ export function MoneyInput({ value, onChange, currency, ...props }) {
 }
 
 // Row of choice buttons (scrolls sideways if there are many).
-export function Segmented({ options, value, onChange, size = "md" }) {
+// `wrap`: options flow onto more lines instead of scrolling sideways (all visible at once).
+export function Segmented({ options, value, onChange, size = "md", wrap = false }) {
   return (
-    <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+    <div className={wrap ? "flex flex-wrap gap-1.5" : "no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5"}>
       {options.map(({ id, label, icon: Icon }) => {
         const on = value === id;
         return (
           <button
             key={id}
             type="button"
+            aria-pressed={on}
             onClick={() => onChange(id)}
             className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 transition-colors active:scale-[0.97] ${size === "sm" ? "h-9 text-xs" : "h-10 text-sm"} ${
               on ? "border-violet-400/50 bg-violet-500/15 font-medium text-violet-300" : "border-white/10 text-zinc-400"
