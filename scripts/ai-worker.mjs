@@ -124,6 +124,74 @@ async function textEmbedding(q) {
   return { clip: b64(normalize(text_embeds.data)) };
 }
 
+// Group faces into people. Every face is compared with every other; the two closest groups
+// are joined while their average similarity is at least `threshold`. Two faces from the same
+// photo are never the same person. `seeds` are groups the user confirmed (named or joined):
+// they stay together, and two differently named groups are never joined.
+function cluster({ faces, seeds = [], threshold = 0.58 }) {
+  const n = faces.length;
+  const vecs = faces.map((f) => {
+    const b = Buffer.from(f.emb, "base64");
+    return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.length));
+  });
+  for (const v of vecs) {
+    let s = 0;
+    for (const x of v) s += x * x;
+    s = Math.sqrt(s) || 1;
+    for (let k = 0; k < v.length; k++) v[k] /= s;
+  }
+  const index = new Map(faces.map((f, i) => [f.id, i]));
+  const owner = new Array(n).fill(-1);
+  let groups = [];
+  for (const seed of seeds) {
+    const m = seed.ids.map((id) => index.get(id)).filter((i) => i !== undefined && owner[i] === -1);
+    if (!m.length) continue;
+    m.forEach((i) => (owner[i] = groups.length));
+    groups.push({ m, photos: new Set(m.map((i) => faces[i].photo)), name: seed.name || "" });
+  }
+  for (let i = 0; i < n; i++) if (owner[i] === -1) groups.push({ m: [i], photos: new Set([faces[i].photo]), name: "" });
+  const dot = (a, b) => {
+    let d = 0;
+    for (let k = 0; k < a.length; k++) d += a[k] * b[k];
+    return d;
+  };
+  // Similarity between groups (sum over face pairs), kept up to date as groups join.
+  const k = groups.length;
+  const sum = Array.from({ length: k }, () => new Float64Array(k));
+  for (let a = 0; a < k; a++)
+    for (let b = a + 1; b < k; b++) {
+      let s = 0;
+      for (const x of groups[a].m) for (const y of groups[b].m) s += dot(vecs[x], vecs[y]);
+      sum[a][b] = sum[b][a] = s;
+    }
+  const alive = new Array(k).fill(true);
+  for (;;) {
+    let best = -Infinity, ba = -1, bb = -1;
+    for (let a = 0; a < k; a++) {
+      if (!alive[a]) continue;
+      for (let b = a + 1; b < k; b++) {
+        if (!alive[b]) continue;
+        const A = groups[a], B = groups[b];
+        if (A.name && B.name && A.name !== B.name) continue;
+        const avg = sum[a][b] / (A.m.length * B.m.length);
+        if (avg <= best) continue;
+        let shared = false;
+        for (const p of A.photos) if (B.photos.has(p)) { shared = true; break; }
+        if (shared) continue;
+        best = avg; ba = a; bb = b;
+      }
+    }
+    if (best < threshold) break;
+    const A = groups[ba], B = groups[bb];
+    A.m.push(...B.m);
+    for (const p of B.photos) A.photos.add(p);
+    A.name ||= B.name;
+    alive[bb] = false;
+    for (let c = 0; c < k; c++) if (alive[c] && c !== ba) sum[ba][c] = sum[c][ba] = sum[ba][c] + sum[bb][c];
+  }
+  return { clusters: groups.filter((g, i) => alive[i]).map((g) => g.m.map((i) => faces[i].id)) };
+}
+
 const out = (msg) => process.stdout.write(JSON.stringify(msg) + "\n");
 const rl = readline.createInterface({ input: process.stdin });
 // One job at a time, in order: keeps memory and CPU use low.
@@ -139,6 +207,7 @@ rl.on("line", (line) => {
     try {
       if (msg.cmd === "analyse") out({ id: msg.id, ...(await analyse(msg.file)) });
       else if (msg.cmd === "text") out({ id: msg.id, ...(await textEmbedding(String(msg.q ?? "").slice(0, 200))) });
+      else if (msg.cmd === "cluster") out({ id: msg.id, ...cluster(msg) });
       else out({ id: msg.id, ok: true });
     } catch (error) {
       out({ id: msg.id, error: String(error?.message ?? error).slice(0, 300) });

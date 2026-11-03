@@ -20,10 +20,6 @@ const SKIP = 10;
 const HIDE_AFTER_MS = 2600;
 const DOUBLE_TAP_MS = 280;
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const QUALITY_KEY = "ps.quality";
-
-const qualityLabel = (q, short) => (q === "original" ? (short >= 2160 ? "4K" : short ? `${short}p` : "Original") : `${q}p`);
-
 const RESUME_KEY = "ps.resume";
 
 const clock = (t) => {
@@ -82,119 +78,9 @@ export default function VideoPlayer({ file, onControls, onError }) {
   const [scrub, setScrub] = useState(null); // fraction 0..1 while dragging the bar
   const [skip, setSkip] = useState(null); // { side, seconds, id } ripple
   const [resumed, setResumed] = useState(0);
-  // Quality: what the viewer chose ("auto", "original" or 720…) and what's playing now.
-  const [choice, setChoice] = useState(() => {
-    try {
-      return localStorage.getItem(QUALITY_KEY) || "auto";
-    } catch {
-      return "auto";
-    }
-  });
-  // null until we know which copy to play, so the video never starts loading the big original
-  // and then jumps to a lighter copy (that switch was the "glitch" when opening a video).
-  const [playingQ, setPlayingQ] = useState(null);
-  const [qStatus, setQStatus] = useState(null); // { short, options: [{ q, ready, progress }] }
-  const [qualityMenu, setQualityMenu] = useState(false);
-  const [notice, setNotice] = useState("");
-  const switching = useRef(null); // { time, play } carried across a quality switch
-  // Back (or a tap on the picture) closes an open speed / quality menu, not the viewer.
-  useBackClose(speedMenu || qualityMenu, () => {
-    setSpeedMenu(false);
-    setQualityMenu(false);
-  });
+  // Back (or a tap on the picture) closes the speed menu, not the viewer.
+  useBackClose(speedMenu, () => setSpeedMenu(false));
   const downAt = useRef(null); // where the finger went down, to tell taps from swipes
-
-  // ----- Quality -----
-  const name = file.path ?? file.name;
-  const loadStatus = useCallback(async () => {
-    const d = await fetch(`/api/stream?name=${encodeURIComponent(name)}&status=1`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null);
-    if (d) setQStatus(d);
-    return d;
-  }, [name]);
-
-  const switchTo = useCallback((q) => {
-    const v = video.current;
-    setPlayingQ((current) => {
-      if (current === q) return current;
-      if (v && current !== null) switching.current = { time: v.currentTime, play: !v.paused };
-      return q;
-    });
-  }, []);
-
-  const prepare = useCallback(
-    (q) =>
-      fetch("/api/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, q }),
-      }).catch(() => {}),
-    [name]
-  );
-
-  // First look: what lighter copies exist, and pick the starting quality before loading.
-  // Auto starts on the light copy the PC prepares in the background (720p, or 480p on a
-  // slow connection): it opens in a moment instead of pulling a huge 4K file first.
-  useEffect(() => {
-    let live = true;
-    // If the PC is slow to answer, don't keep the viewer waiting: just play the original.
-    const fallback = setTimeout(() => live && setPlayingQ((q) => q ?? "original"), 2500);
-    const first = setTimeout(() => loadStatus().then((d) => {
-      if (!live) return;
-      clearTimeout(fallback);
-      if (!d) return setPlayingQ((q) => q ?? "original");
-      const ready = (q) => d.options.find((o) => o.q === q)?.ready;
-      // Always the original file, unless you picked a lower quality yourself.
-      const start = typeof choice === "string" && choice !== "auto" && choice !== "original" && ready(Number(choice)) ? Number(choice) : "original";
-      setPlayingQ((q) => q ?? start);
-    }), 0);
-    return () => {
-      live = false;
-      clearTimeout(first);
-      clearTimeout(fallback);
-    };
-    // Only when a different video opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
-
-  // While a copy is being made, keep checking; switch to it when it's ready (if still wanted).
-  const preparing = qStatus?.options.some((o) => o.progress !== null);
-  useEffect(() => {
-    if (!preparing) return;
-    const timer = setInterval(async () => {
-      const d = await loadStatus();
-      if (!d) return;
-      const wanted = choice === "auto" ? d.options.find((o) => o.q <= 720 && o.ready)?.q : Number(choice);
-      if (wanted && d.options.find((o) => o.q === wanted)?.ready && choice !== "auto") {
-        switchTo(wanted);
-        if (choice === "auto") setNotice(`Switched to ${wanted}p for smoother playback`);
-      }
-    }, 1200);
-    return () => clearInterval(timer);
-  }, [preparing, loadStatus, choice, playingQ, switchTo]);
-
-  useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(""), 4000);
-    return () => clearTimeout(t);
-  }, [notice]);
-
-  function choose(q) {
-    setQualityMenu(false);
-    setChoice(String(q));
-    try {
-      localStorage.setItem(QUALITY_KEY, String(q));
-    } catch {}
-    if (q === "auto" || q === "original") return switchTo("original");
-    const option = qStatus?.options.find((o) => o.q === q);
-    if (option?.ready) switchTo(q);
-    else {
-      prepare(q);
-      setQStatus((st) => st && { ...st, options: st.options.map((o) => (o.q === q ? { ...o, progress: 0 } : o)) });
-      setNotice(`Preparing ${q}p on the studio PC… it'll switch over when ready`);
-    }
-  }
 
   // ----- Controls visibility -----
   const show = useCallback((stay = false) => {
@@ -306,9 +192,8 @@ export default function VideoPlayer({ file, onControls, onError }) {
     // A finger that travelled was a swipe (next / previous / close), not a tap.
     const down = downAt.current;
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) return;
-    if (speedMenu || qualityMenu) {
+    if (speedMenu) {
       setSpeedMenu(false);
-      setQualityMenu(false);
       return;
     }
     const rect = root.current.getBoundingClientRect();
@@ -382,7 +267,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
   const pct = duration ? (shown / duration) * 100 : 0;
   const bufferedPct = duration ? (buffered / duration) * 100 : 0;
   // Menus keep the controls up, so they never fade away mid-choice.
-  const controlsOn = controls || !playing || scrub !== null || speedMenu || qualityMenu;
+  const controlsOn = controls || !playing || scrub !== null || speedMenu;
   const fade = `transition-opacity duration-200 ${controlsOn ? "opacity-100" : "pointer-events-none opacity-0"}`;
 
   return (
@@ -396,25 +281,19 @@ export default function VideoPlayer({ file, onControls, onError }) {
         controlsOn ? "" : "cursor-none"
       }`}
     >
+      {/* Fills its box from the first frame (poster included), so nothing jumps when the
+          video loads. Always the original file. */}
       <video
         ref={video}
-        src={playingQ === null ? undefined : playingQ === "original" ? fileUrl(file) : `/api/stream?name=${encodeURIComponent(name)}&q=${playingQ}&k=${file.key}`}
+        src={fileUrl(file)}
         poster={thumbUrl(file)}
         autoPlay
         playsInline
         preload="auto"
-        className="max-h-full max-w-full"
+        className="h-full w-full object-contain"
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           setDuration(v.duration);
-          // Quality switch: carry on from the same moment.
-          if (switching.current) {
-            const { time, play } = switching.current;
-            switching.current = null;
-            v.currentTime = time;
-            if (play) v.play().catch(() => {});
-            return;
-          }
           const at = readResume(file.key);
           if (at > 5 && at < v.duration - 5) {
             v.currentTime = at;
@@ -449,7 +328,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
         onError={onError}
       />
 
-      {/* Double-tap ripple */}
+      {/* Double-tap left/right: skip 10 s (keep tapping for more), like YouTube */}
       {skip && (
         <div
           key={skip.id}
@@ -464,35 +343,29 @@ export default function VideoPlayer({ file, onControls, onError }) {
         </div>
       )}
 
-      {/* Dim layer behind the controls */}
-      <div className={`pointer-events-none absolute inset-0 bg-black/35 ${fade}`} />
-
-      {/* Middle: back 10 · play/pause · forward 10 */}
-      <div className={`absolute inset-0 flex items-center justify-center gap-10 sm:gap-16 ${fade}`} style={{ pointerEvents: "none" }}>
-        <CircleButton label="Back 10 seconds" onClick={() => skipFrom("left")} visible={controlsOn}>
-          <BackTenIcon size={26} />
-        </CircleButton>
+      {/* Middle: one play / pause button (or a small spinner while loading) */}
+      <div className={`pointer-events-none absolute inset-0 flex items-center justify-center ${fade}`}>
         {waiting && playing ? (
-          <div className="h-16 w-16 animate-spin rounded-full border-[3px] border-white/25 border-t-white" aria-label="Loading" />
+          <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-white/25 border-t-white" aria-label="Loading" />
         ) : (
-          <CircleButton label={ended ? "Replay" : playing ? "Pause" : "Play"} onClick={togglePlay} visible={controlsOn} big>
-            {ended ? <ReplayIcon size={30} strokeWidth={2.2} /> : playing ? <PauseIcon size={30} /> : <PlayIcon size={30} className="translate-x-0.5" />}
-          </CircleButton>
+          <button
+            data-control
+            aria-label={ended ? "Replay" : playing ? "Pause" : "Play"}
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePlay();
+            }}
+            style={{ pointerEvents: controlsOn ? "auto" : "none" }}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-[#fff] backdrop-blur-sm transition-transform active:scale-90"
+          >
+            {ended ? <ReplayIcon size={28} strokeWidth={2.2} /> : playing ? <PauseIcon size={26} /> : <PlayIcon size={26} className="translate-x-0.5" />}
+          </button>
         )}
-        <CircleButton label="Forward 10 seconds" onClick={() => skipFrom("right")} visible={controlsOn}>
-          <ForwardTenIcon size={26} />
-        </CircleButton>
       </div>
 
-      {notice && (
-        <div className="anim-rise pointer-events-none absolute left-1/2 top-4 z-10 max-w-[90%] -translate-x-1/2 rounded-full bg-black/75 px-4 py-2 text-center text-xs text-[#fff] backdrop-blur">
-          {notice}
-        </div>
-      )}
-
       {resumed > 0 && (
-        <div data-control className="anim-rise absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/70 py-1.5 pl-4 pr-1.5 text-xs text-[#fff] backdrop-blur">
-          Resumed at {clock(resumed)}
+        <div data-control className="anim-rise absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full bg-black/70 py-1.5 pl-4 pr-1.5 text-xs text-[#fff] backdrop-blur">
+          Carrying on from {clock(resumed)}
           <button
             onClick={() => {
               video.current.currentTime = 0;
@@ -505,66 +378,46 @@ export default function VideoPlayer({ file, onControls, onError }) {
         </div>
       )}
 
-      {/* Bottom: time, seek bar, speed, mute, full screen */}
-      <div
-        data-control
-        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-10 sm:px-5 ${fade}`}
-      >
-        <div className="flex items-center gap-1 text-[#fff]">
-          <span className="mr-auto pl-1 text-[13px] font-medium tabular-nums">
-            {clock(shown)} <span className="text-[#fff]/60">/ {clock(duration)}</span>
-          </span>
-
-          {/* Not "relative": the menu lines up with the right edge of the player, not the button. */}
-          {qStatus && (
-            <div>
-              <BarButton
-                label="Quality"
-                onClick={() => {
-                  setSpeedMenu(false);
-                  setQualityMenu((o) => !o);
-                  loadStatus();
-                }}
-              >
-                <span className="rounded-md border border-[#fff]/70 px-1.5 py-px text-[11px] font-bold tabular-nums leading-tight">
-                  {choice === "auto" ? (playingQ === "original" ? "AUTO" : `AUTO·${playingQ}`) : qualityLabel(playingQ, qStatus.short)}
-                </span>
-              </BarButton>
-              {qualityMenu && (
-                <div className="anim-pop absolute bottom-[5.75rem] right-3 z-20 w-64 max-w-[calc(100%-1.5rem)] overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
-                  <p className="px-4 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wide text-[#fff]/50">Quality</p>
-                  {[
-                    { q: "auto", label: "Auto", hint: "Adjusts to your connection" },
-                    { q: "original", label: `Original · ${qualityLabel("original", qStatus.short)}`, hint: "Full quality, needs fast internet" },
-                    ...qStatus.options.map((o) => ({
-                      q: o.q,
-                      label: `${o.q}p`,
-                      hint: o.progress !== null ? `Preparing… ${Math.round(o.progress * 100)}%` : o.ready ? "Ready" : "Tap to prepare (one-time)",
-                    })),
-                  ].map(({ q, label, hint }) => {
-                    const selected = String(choice) === String(q);
-                    return (
-                      <button
-                        key={q}
-                        onClick={() => choose(q)}
-                        className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/10 ${selected ? "text-violet-300" : "text-[#fff]"}`}
-                      >
-                        <span className="min-w-0">
-                          <span className={`block text-sm ${selected ? "font-semibold" : ""}`}>{label}</span>
-                          <span className="block truncate text-[11px] text-[#fff]/45">{hint}</span>
-                        </span>
-                        {selected && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+      {/* Bottom: one slim line — time · seek bar · length, then speed, sound, full screen */}
+      <div data-control className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-1 pt-8 sm:px-5 ${fade}`}>
+        <div className="flex items-center gap-2 text-[#fff]">
+          <span className="w-10 shrink-0 text-right text-xs font-medium tabular-nums">{clock(shown)}</span>
+          {/* Tall invisible touch strip around a thin bar, so it's easy to grab. */}
+          <div
+            ref={bar}
+            role="slider"
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(shown)}
+            tabIndex={0}
+            onPointerDown={onBarDown}
+            onPointerMove={onBarMove}
+            onPointerUp={onBarUp}
+            onPointerCancel={() => setScrub(null)}
+            className="group relative flex h-10 min-w-0 flex-1 cursor-pointer touch-none items-center"
+          >
+            <div className={`relative w-full overflow-hidden rounded-full bg-white/25 transition-[height] duration-150 ${scrub !== null ? "h-1.5" : "h-1 group-hover:h-1.5"}`}>
+              <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: `${bufferedPct}%` }} />
+              <div className="absolute inset-y-0 left-0 bg-[#fff]" style={{ width: `${pct}%` }} />
             </div>
-          )}
-
+            <div
+              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fff] shadow-md transition-[width,height] duration-150 ${scrub !== null ? "h-5 w-5" : "h-3 w-3"}`}
+              style={{ left: `${pct}%` }}
+            />
+            {scrub !== null && (
+              <div
+                className="absolute bottom-10 -translate-x-1/2 rounded-lg bg-black/80 px-2.5 py-1 text-sm font-semibold tabular-nums text-[#fff] backdrop-blur"
+                style={{ left: `clamp(2rem, ${pct}%, calc(100% - 2rem))` }}
+              >
+                {clock(shown)}
+              </div>
+            )}
+          </div>
+          <span className="w-10 shrink-0 text-xs font-medium tabular-nums text-[#fff]/70">{clock(duration)}</span>
           <div className="relative">
-            <BarButton label="Playback speed" onClick={() => { setQualityMenu(false); setSpeedMenu((o) => !o); }}>
-              {rate === 1 ? <SpeedIcon size={20} /> : <span className="text-[13px] font-semibold tabular-nums">{rate}×</span>}
+            <BarButton label="Playback speed" onClick={() => setSpeedMenu((o) => !o)}>
+              {rate === 1 ? <SpeedIcon size={19} /> : <span className="text-xs font-semibold tabular-nums">{rate}×</span>}
             </BarButton>
             {speedMenu && (
               <div className="anim-pop absolute bottom-12 right-0 w-36 overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
@@ -577,9 +430,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
                       setSpeedMenu(false);
                       show();
                     }}
-                    className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-white/10 ${
-                      s === rate ? "font-semibold text-violet-300" : "text-[#fff]"
-                    }`}
+                    className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-white/10 ${s === rate ? "font-semibold text-violet-300" : "text-[#fff]"}`}
                   >
                     {s === 1 ? "Normal" : `${s}×`}
                     {s === rate && <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />}
@@ -589,68 +440,14 @@ export default function VideoPlayer({ file, onControls, onError }) {
             )}
           </div>
           <BarButton label={muted ? "Unmute" : "Mute"} onClick={() => (video.current.muted = !video.current.muted)}>
-            {muted ? <MuteIcon size={20} /> : <VolumeIcon size={20} />}
+            {muted ? <MuteIcon size={19} /> : <VolumeIcon size={19} />}
           </BarButton>
           <BarButton label={fullscreen ? "Exit full screen" : "Full screen"} onClick={toggleFullscreen}>
-            {fullscreen ? <ShrinkIcon size={20} /> : <ExpandIcon size={20} />}
+            {fullscreen ? <ShrinkIcon size={19} /> : <ExpandIcon size={19} />}
           </BarButton>
-        </div>
-
-        {/* Tall invisible touch strip around a thin bar, so it's easy to grab. */}
-        <div
-          ref={bar}
-          role="slider"
-          aria-label="Seek"
-          aria-valuemin={0}
-          aria-valuemax={Math.round(duration)}
-          aria-valuenow={Math.round(shown)}
-          tabIndex={0}
-          onPointerDown={onBarDown}
-          onPointerMove={onBarMove}
-          onPointerUp={onBarUp}
-          onPointerCancel={() => setScrub(null)}
-          className="group relative flex h-9 cursor-pointer touch-none items-center"
-        >
-          <div className={`relative w-full overflow-hidden rounded-full bg-white/25 transition-[height] duration-150 ${scrub !== null ? "h-1.5" : "h-1 group-hover:h-1.5"}`}>
-            <div className="absolute inset-y-0 left-0 bg-white/40" style={{ width: `${bufferedPct}%` }} />
-            <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-500 to-pink-500" style={{ width: `${pct}%` }} />
-          </div>
-          <div
-            className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#fff] shadow-md transition-[width,height] duration-150 ${
-              scrub !== null ? "h-5 w-5" : "h-3.5 w-3.5"
-            }`}
-            style={{ left: `${pct}%` }}
-          />
-          {scrub !== null && (
-            <div
-              className="absolute bottom-9 -translate-x-1/2 rounded-lg bg-black/80 px-2.5 py-1 text-sm font-semibold tabular-nums text-[#fff] backdrop-blur"
-              style={{ left: `clamp(2rem, ${pct}%, calc(100% - 2rem))` }}
-            >
-              {clock(shown)}
-            </div>
-          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function CircleButton({ label, onClick, visible, big, children }) {
-  return (
-    <button
-      data-control
-      aria-label={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      style={{ pointerEvents: visible ? "auto" : "none" }}
-      className={`flex items-center justify-center rounded-full bg-black/40 text-[#fff] backdrop-blur-sm transition-transform active:scale-90 ${
-        big ? "h-16 w-16" : "h-12 w-12"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
