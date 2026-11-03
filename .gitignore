@@ -47,3 +47,22 @@ next-env.d.ts
 /history/
 /.next-b/
 /.next-build/
+
+# Android app build output and signing key (keep release.jks backed up!)
+/android/build/
+/android/dist/
+/android/release.jks
+
+# Local AI models for photo search and People (downloaded once)
+/.ai-models/
+
+# Research notes and reports
+/research_notes/
+/reports/
+
+# Test-only pretend backup drive
+/.backup-test-root
+
+# Android private values (signing-key password, app-lock PIN hash)
+/android/secrets.properties
+/android/src/com/puneetstudios/app/Secrets.java

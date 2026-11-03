@@ -5,17 +5,17 @@ import {
   ArrowLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  DiamondIcon,
   DotsIcon,
   DownloadIcon,
   FileIcon,
+  FolderPlusIcon,
+  HeartFilledIcon,
+  HeartIcon,
   InfoIcon,
   MusicIcon,
   PencilIcon,
   RotateRightIcon,
   ScissorsIcon,
-  StarFilledIcon,
-  StarIcon,
   TrashIcon,
 } from "@/components/icons";
 import Properties from "@/components/media/Properties";
@@ -27,10 +27,16 @@ import { formatDuration, formatSize } from "@/lib/format";
 
 const SWIPE_PX = 60;
 
-function IconButton({ label, onClick, href, download, danger, children }) {
-  const className = `flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-    danger ? "text-zinc-200 hover:bg-red-500/20 hover:text-red-300" : "text-zinc-200 hover:bg-white/10"
+function IconButton({ label, onClick, href, download, danger, children, caption }) {
+  const className = `flex min-w-11 flex-col items-center justify-center gap-0.5 rounded-full px-1 transition-colors ${caption ? "h-14 sm:h-12" : "h-11"} ${
+    danger ? "text-zinc-100 hover:bg-red-500/20 hover:text-red-300" : "text-zinc-100 hover:bg-white/10"
   }`;
+  children = (
+    <>
+      {children}
+      {caption && <span className="text-[10.5px] font-medium text-zinc-300">{caption}</span>}
+    </>
+  );
   return href ? (
     <a href={href} download={download} aria-label={label} title={label} className={className}>
       {children}
@@ -91,7 +97,7 @@ function Stage({ file, onControls, onTap }) {
   );
 }
 
-export default function Viewer({ file, prev, next, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onExtractAudio, onFavorite }) {
+export default function Viewer({ file, prev, next, position, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onExtractAudio, onFavorite, onAddToAlbum }) {
   const [showInfo, setShowInfo] = useState(false);
   const [more, setMore] = useState(false);
   useBackClose(more, () => setMore(false));
@@ -174,10 +180,15 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
     else if (g.axis === "y" && d.dy > SWIPE_PX * 1.8) onClose();
   }
 
+  const takenAt = file.taken ? new Date(file.taken) : null;
+  const title = takenAt
+    ? takenAt.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+    : file.name;
   const details = [
-    formatSize(file.size),
-    file.width && file.height ? `${file.width}×${file.height}` : null,
+    takenAt && takenAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true }),
     file.kind === "video" ? formatDuration(file.duration) : null,
+    formatSize(file.size),
+    position,
   ].filter(Boolean);
 
   const dragging = Boolean(drag);
@@ -187,6 +198,15 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
     transition: dragging ? "none" : "transform 260ms var(--ease-out)",
   };
   const fade = `transition-[opacity,transform] duration-200 ${chrome && !pull ? "opacity-100" : "pointer-events-none opacity-0"}`;
+  const moreItems = [
+    { label: "Details", icon: InfoIcon, run: () => setShowInfo(true) },
+    { label: "Rename", icon: PencilIcon, run: () => onRename(file) },
+    ...(file.kind === "video" && onTrim ? [{ label: "Trim video", icon: ScissorsIcon, run: () => onTrim(file) }] : []),
+    ...(file.kind === "video" && onRotate ? [{ label: "Rotate / mirror", icon: RotateRightIcon, run: () => onRotate(file) }] : []),
+    ...(file.kind === "video" && onExtractAudio ? [{ label: "Save the sound", icon: MusicIcon, run: () => onExtractAudio(file) }] : []),
+  ];
+  const arrow =
+    "absolute top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-[#fff] backdrop-blur-md transition-colors hover:bg-black/55 active:scale-95 sm:h-12 sm:w-12";
 
   return (
     <div
@@ -199,104 +219,33 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
       onTouchCancel={onTouchEnd}
     >
       <header
-        className={`relative z-10 flex items-center gap-1 bg-gradient-to-b from-black/60 to-transparent px-2 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-3 ${fade} ${
+        className={`relative z-20 flex items-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 pb-4 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-3 ${fade} ${
           chrome ? "" : "-translate-y-2"
         }`}
       >
         <IconButton label="Back" onClick={onClose}>
-          <ArrowLeftIcon size={20} />
+          <ArrowLeftIcon size={22} />
         </IconButton>
         <div className="mx-1 min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-zinc-100">
-            {file.instagram && <DiamondIcon size={12} className="shrink-0 text-pink-400" />}
-            <span className="truncate">{file.name}</span>
-          </p>
-          <p className="truncate text-xs tabular-nums text-zinc-500">{details.join(" · ")}</p>
+          <p className="truncate text-[15px] font-semibold text-zinc-50">{title}</p>
+          <p className="truncate text-xs tabular-nums text-zinc-400">{details.join(" · ")}</p>
         </div>
         <span className="max-sm:hidden">
-          <IconButton label="Properties" onClick={() => setShowInfo((v) => !v)}>
-            <InfoIcon size={19} />
+          <IconButton label="Details" onClick={() => setShowInfo((v) => !v)}>
+            <InfoIcon size={20} />
           </IconButton>
-        </span>
-        {onFavorite && (
-          <IconButton label={file.favorite ? "Remove from favourites" : "Add to favourites"} onClick={() => onFavorite([file], !file.favorite)}>
-            {file.favorite ? <StarFilledIcon size={19} className="text-amber-300" /> : <StarIcon size={19} />}
-          </IconButton>
-        )}
-        {file.kind === "video" && onTrim && (
-          <IconButton label="Trim" onClick={() => onTrim(file)}>
-            <ScissorsIcon size={19} />
-          </IconButton>
-        )}
-        <span className="flex max-sm:hidden">
-          {file.kind === "video" && onRotate && (
-            <IconButton label="Rotate" onClick={() => onRotate(file)}>
-              <RotateRightIcon size={19} />
-            </IconButton>
-          )}
-          {file.kind === "video" && onExtractAudio && (
-            <IconButton label="Extract audio" onClick={() => onExtractAudio(file)}>
-              <MusicIcon size={19} />
-            </IconButton>
-          )}
-          <IconButton label="Rename" onClick={() => onRename(file)}>
-            <PencilIcon size={18} />
-          </IconButton>
-          <IconButton label="Download" href={downloadUrl(file)} download={file.name}>
-            <DownloadIcon size={19} />
-          </IconButton>
-        </span>
-        <IconButton label="Delete" danger onClick={() => onDelete([file.path])}>
-          <TrashIcon size={19} />
-        </IconButton>
-        {/* Phone: the less-used actions live in a menu so the file name stays readable. */}
-        <span className="relative sm:hidden">
-          <IconButton label="More" onClick={() => setMore((m) => !m)}>
-            <DotsIcon size={19} />
-          </IconButton>
-          {/* Tap anywhere else to close the menu. */}
-          {more && <div className="fixed inset-0 z-10" onClick={() => setMore(false)} />}
-          {more && (
-            <div className="anim-pop absolute right-0 top-11 z-20 w-48 overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
-              {[
-                { label: "Properties", icon: InfoIcon, run: () => setShowInfo(true) },
-                ...(file.kind === "video" && onRotate ? [{ label: "Rotate / mirror", icon: RotateRightIcon, run: () => onRotate(file) }] : []),
-                ...(file.kind === "video" && onExtractAudio ? [{ label: "Extract audio", icon: MusicIcon, run: () => onExtractAudio(file) }] : []),
-                { label: "Rename", icon: PencilIcon, run: () => onRename(file) },
-              ].map(({ label, icon: Icon, run }) => (
-                <button
-                  key={label}
-                  onClick={() => {
-                    setMore(false);
-                    run();
-                  }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-zinc-100 hover:bg-white/5 active:bg-white/5"
-                >
-                  <Icon size={18} className="text-zinc-400" /> {label}
-                </button>
-              ))}
-              <a
-                href={downloadUrl(file)}
-                download={file.name}
-                onClick={() => setMore(false)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-sm text-zinc-100 hover:bg-white/5 active:bg-white/5"
-              >
-                <DownloadIcon size={18} className="text-zinc-400" /> Download to phone
-              </a>
-            </div>
-          )}
         </span>
       </header>
 
       <div
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-16"
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden sm:px-16"
         onClick={(e) => {
           if (!e.target.closest("video, button, a, aside, [data-player], [data-zoomable]")) setChrome((c) => !c);
         }}
       >
         <div className="flex h-full w-full items-center justify-center will-change-transform" style={stageStyle}>
           <div
-            key={file.name}
+            key={file.path ?? file.name}
             className={`flex h-full w-full items-center justify-center ${
               enterFrom === "right" ? "anim-from-right" : enterFrom === "left" ? "anim-from-left" : "anim-pop"
             }`}
@@ -305,27 +254,61 @@ export default function Viewer({ file, prev, next, onClose, onNavigate, onRename
           </div>
         </div>
 
+        {/* Previous / next: on phones too (swiping sideways also works). */}
         {prev && (
-          <button
-            onClick={() => go(prev, "left")}
-            aria-label="Previous"
-            className={`absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/5 text-zinc-200 backdrop-blur hover:bg-white/15 sm:flex ${fade}`}
-          >
+          <button onClick={() => go(prev, "left")} aria-label="Previous" className={`${arrow} left-2 sm:left-4 ${fade}`}>
             <ChevronLeftIcon size={22} />
           </button>
         )}
         {next && (
-          <button
-            onClick={() => go(next, "right")}
-            aria-label="Next"
-            className={`absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/5 text-zinc-200 backdrop-blur hover:bg-white/15 sm:flex ${fade}`}
-          >
+          <button onClick={() => go(next, "right")} aria-label="Next" className={`${arrow} right-2 sm:right-4 ${fade}`}>
             <ChevronRightIcon size={22} />
           </button>
         )}
-
-
       </div>
+
+      <footer className={`relative z-20 bg-gradient-to-t from-black/75 to-transparent px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-4 ${fade}`}>
+        <div className="mx-auto flex max-w-md items-center justify-around">
+          <IconButton label="Download original" caption="Download" href={downloadUrl(file)} download={file.name}>
+            <DownloadIcon size={21} />
+          </IconButton>
+          {onFavorite && (
+            <IconButton label={file.favorite ? "Remove from favourites" : "Add to favourites"} caption="Favourite" onClick={() => onFavorite([file], !file.favorite)}>
+              {file.favorite ? <HeartFilledIcon size={21} className="text-pink-400" /> : <HeartIcon size={21} />}
+            </IconButton>
+          )}
+          {onAddToAlbum && (
+            <IconButton label="Add to album" caption="Album" onClick={() => onAddToAlbum(file)}>
+              <FolderPlusIcon size={21} />
+            </IconButton>
+          )}
+          <span className="relative">
+            <IconButton label="More" caption="More" onClick={() => setMore((m) => !m)}>
+              <DotsIcon size={21} className="rotate-90" />
+            </IconButton>
+            {more && <div className="fixed inset-0 z-10" onClick={() => setMore(false)} />}
+            {more && (
+              <div className="anim-pop absolute bottom-16 left-1/2 z-20 w-56 -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/95 py-1.5 shadow-2xl backdrop-blur">
+                {moreItems.map(({ label, icon: Icon, run }) => (
+                  <button
+                    key={label}
+                    onClick={() => {
+                      setMore(false);
+                      run();
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-zinc-100 hover:bg-white/5 active:bg-white/5"
+                  >
+                    <Icon size={18} className="text-zinc-400" /> {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
+          <IconButton label="Delete" caption="Delete" danger onClick={() => onDelete([file.path])}>
+            <TrashIcon size={21} />
+          </IconButton>
+        </div>
+      </footer>
 
       {showInfo && <Properties file={file} onClose={() => setShowInfo(false)} />}
     </div>

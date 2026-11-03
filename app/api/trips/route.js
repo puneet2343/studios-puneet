@@ -1,23 +1,48 @@
 import { isAuthed, unauthorized } from "@/lib/auth";
-import { createTripFolder, tripSuggestions } from "@/lib/library";
-import { exists, forgetLibrarySize, resolveName } from "@/lib/media";
+import { tripSuggestions } from "@/lib/library";
+import { TripError, createTrip, deleteTrip, listTrips, updateTrip } from "@/lib/trips";
 
-// GET                     -> suggested trip folders for loose top-level media
-// POST { name, paths }    -> make the folder and move those files into it
+// Trips (see lib/trips.js).
+// GET                          -> { trips, suggestions } (suggestions: loose photos that look like a trip)
+// POST { name, start, end }    -> create; matching photos move into its album -> { trip, moved }
+// PATCH { id, name?, start?, end? } -> edit                                  -> { trip, moved }
+// DELETE ?id=…                 -> forget the trip (its album and photos stay)
+function failed(error) {
+  if (error instanceof TripError) return Response.json({ error: error.message }, { status: error.status });
+  return Response.json({ error: `Something went wrong: ${error.message}` }, { status: 500 });
+}
+
 export async function GET(request) {
   if (!isAuthed(request)) return unauthorized();
-  return Response.json({ trips: await tripSuggestions() });
+  const [trips, suggestions] = await Promise.all([listTrips(), tripSuggestions().catch(() => [])]);
+  return Response.json({ trips, suggestions }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request) {
   if (!isAuthed(request)) return unauthorized();
-  const { name, paths } = await request.json().catch(() => ({}));
-  if (!Array.isArray(paths) || !paths.length) return Response.json({ error: "Nothing to move" }, { status: 400 });
-  const target = resolveName(name);
-  if (!target) return Response.json({ error: "That name isn't allowed. Avoid symbols like / : * ? and don't start with a dot." }, { status: 400 });
-  if (await exists(target)) return Response.json({ error: "A folder with that name already exists" }, { status: 409 });
-  const result = await createTripFolder(name, paths.slice(0, 5000), resolveName);
-  forgetLibrarySize();
-  if (result.error) return Response.json(result, { status: 400 });
-  return Response.json(result, { status: 201 });
+  try {
+    return Response.json(await createTrip(await request.json().catch(() => ({}))), { status: 201 });
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function PATCH(request) {
+  if (!isAuthed(request)) return unauthorized();
+  const body = await request.json().catch(() => ({}));
+  try {
+    return Response.json(await updateTrip(body.id, body));
+  } catch (error) {
+    return failed(error);
+  }
+}
+
+export async function DELETE(request) {
+  if (!isAuthed(request)) return unauthorized();
+  try {
+    await deleteTrip(request.nextUrl.searchParams.get("id"));
+    return Response.json({ ok: true });
+  } catch (error) {
+    return failed(error);
+  }
 }

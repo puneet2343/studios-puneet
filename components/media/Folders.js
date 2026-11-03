@@ -226,7 +226,7 @@ export function NameDialog({ title, initial = "", action, onClose, submit }) {
           onFocus={(e) => e.target.select()}
           placeholder="e.g. Goa Trip"
           maxLength={120}
-          className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3.5 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-violet-400/60"
+          className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3.5 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-accent"
         />
         <p className={`mt-2 text-sm text-red-400 ${error ? "" : "hidden"}`}>{error}</p>
       </form>

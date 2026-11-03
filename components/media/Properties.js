@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CloseIcon, DiamondIcon, StarFilledIcon } from "@/components/icons";
+import { CloseIcon, StarFilledIcon } from "@/components/icons";
 import useBackClose from "@/components/useBackClose";
 import { formatDateTime, formatDuration, formatSize } from "@/lib/format";
 
@@ -78,7 +78,7 @@ export default function Properties({ file, onClose }) {
             <h2 className="text-base font-semibold text-zinc-100">Properties</h2>
             <p className="mt-0.5 flex items-center gap-1.5 break-all text-xs text-zinc-500">
               {file.favorite && <StarFilledIcon size={11} className="shrink-0 text-amber-300" />}
-              {file.instagram && <DiamondIcon size={11} className="shrink-0 text-pink-400" />}
+              
               {file.name}
             </p>
           </div>

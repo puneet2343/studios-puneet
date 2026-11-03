@@ -14,7 +14,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const PORT = process.env.PORT || "3000";
+const PORT = process.env.PORT || "4600"; // 3000-3010 are used by other projects
 const ROOT = path.resolve(__dirname, "..");
 const NEXT = path.join(ROOT, "node_modules", "next", "dist", "bin", "next");
 const SLOTS = [".next", ".next-b"];

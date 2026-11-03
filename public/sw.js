@@ -94,9 +94,11 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Puneet Studios", {
       body: data.body || "",
-      icon: "/icon-192.png?v=3",
-      badge: "/icon-192.png?v=3",
+      icon: "/icon-192.png?v=4",
+      badge: "/icon-192.png?v=4",
       tag: data.tag || "puneet-studios",
+      silent: Boolean(data.silent), // "working again" messages don't make a sound
+      renotify: !data.silent,
       data: { url: data.url || "/" },
     })
   );

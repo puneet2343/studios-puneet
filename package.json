@@ -10,8 +10,13 @@
     "serve": "node scripts/serve.js"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.7.6",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
+    "@vladmandic/human": "^3.3.6",
     "archiver": "^7.0.1",
     "exif-reader": "^2.0.3",
+    "leaflet": "^1.9.4",
     "next": "16.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",

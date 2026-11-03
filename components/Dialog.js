@@ -35,7 +35,7 @@ export default function Dialog({ title, children, onClose, footer }) {
 
 export function Button({ variant = "secondary", className = "", ...props }) {
   const styles = {
-    primary: "bg-white text-zinc-950 hover:bg-zinc-200",
+    primary: "bg-accent text-[#fff] hover:bg-accent-strong",
     secondary: "border border-white/10 text-zinc-200 hover:bg-white/5",
     danger: "bg-red-500/90 text-[#fff] hover:bg-red-500",
     ghost: "text-zinc-300 hover:bg-white/5",

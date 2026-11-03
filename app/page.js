@@ -1,5 +1,5 @@
-import MediaLibrary from "@/components/media/MediaLibrary";
+import PhotosPage from "@/components/pages/PhotosPage";
 
-export default function MediaPage() {
-  return <MediaLibrary />;
+export default function Page() {
+  return <PhotosPage />;
 }

@@ -4,6 +4,7 @@ import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import { isAuthed, unauthorized } from "@/lib/auth";
 import { serveFile } from "@/lib/serve-file";
+import { albumDeleted, albumRenamed } from "@/lib/trips";
 import { formatSize } from "@/lib/format";
 import { UPLOAD_RESERVE } from "@/lib/storage-levels";
 import {
@@ -154,11 +155,13 @@ export async function PATCH(request) {
     }
   }
 
+  const wasFolder = (await fs.stat(file.full)).isDirectory();
   try {
     await renameFile(file.full, next);
   } catch (error) {
     return fileErrorResponse(error, "moveTo" in body ? "move" : "rename");
   }
+  if (wasFolder) await albumRenamed(relPath(file.full), relPath(next)).catch(() => {});
   return Response.json({ ok: true, name: path.basename(next), path: relPath(next) });
 }
 
@@ -167,8 +170,10 @@ export async function DELETE(request) {
   const file = target(request);
   if (!file) return badName();
   if (!(await exists(file.full))) return notFound();
+  const wasFolder = (await fs.stat(file.full)).isDirectory();
   try {
     const trashId = await moveToTrash(file.full);
+    if (wasFolder) await albumDeleted(relPath(file.full)).catch(() => {});
     return Response.json({ ok: true, trashId });
   } catch (error) {
     return fileErrorResponse(error, "delete");

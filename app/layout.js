@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "Puneet Studios",
   description: "Puneet Studios creator workspace: media library on the studio PC",
-  icons: { icon: "/icon-192.png?v=3", apple: "/apple-touch-icon.png?v=3" },
+  icons: { icon: "/icon-192.png?v=4", apple: "/apple-touch-icon.png?v=4" },
   appleWebApp: { capable: true, title: "Puneet Studios", statusBarStyle: "black-translucent" },
 };
 

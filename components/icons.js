@@ -246,3 +246,27 @@ export const ClockIcon = make(
 );
 export const MapIcon = make(<path d="m9 4.5-5 2v13l5-2 6 2 5-2v-13l-5 2zM9 4.5v13M15 6.5v13" />);
 export const ChartIcon = make(<path d="M4 4v15a1 1 0 0 0 1 1h15M8 16v-4M12 16V8M16 16v-6M20 16V6" />);
+export const PhoneIcon = make(<path d="M8 3h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21H8a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 8 3zM11 18h2" />);
+export const PhotosIcon = make(
+  <>
+    <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+    <circle cx="15.5" cy="8.5" r="1.6" />
+    <path d="m3.8 17 5-5.2 4 4 2.4-2.3 4.9 4.6" />
+  </>
+);
+export const AlbumsIcon = make(
+  <>
+    <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="2" />
+    <rect x="13" y="3.5" width="7.5" height="7.5" rx="2" />
+    <rect x="3.5" y="13" width="7.5" height="7.5" rx="2" />
+    <rect x="13" y="13" width="7.5" height="7.5" rx="2" />
+  </>
+);
+export const HeartIcon = make(<path d="M12 20s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z" />);
+export const HeartFilledIcon = ({ size = 18, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <path d="M12 20s-7.5-4.6-7.5-10.1A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z" fill="currentColor" />
+  </svg>
+);
+export const CloudCheckIcon = make(<path d="M7 18.5h10.5a4 4 0 0 0 .6-8 6 6 0 0 0-11.6 1.6A3.3 3.3 0 0 0 7 18.5zM9.5 13.5l2 2 3.5-3.6" />);
+export const SlidersIcon = make(<path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5" />);

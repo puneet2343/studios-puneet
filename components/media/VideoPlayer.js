@@ -24,11 +24,6 @@ const QUALITY_KEY = "ps.quality";
 
 const qualityLabel = (q, short) => (q === "original" ? (short >= 2160 ? "4K" : short ? `${short}p` : "Original") : `${q}p`);
 
-// A slow or metered connection: Auto starts on a lighter copy instead of the full 4K file.
-function slowConnection() {
-  const c = typeof navigator !== "undefined" ? navigator.connection : null;
-  return Boolean(c && (c.saveData || ["slow-2g", "2g", "3g"].includes(c.effectiveType) || (c.downlink && c.downlink < 8)));
-}
 const RESUME_KEY = "ps.resume";
 
 const clock = (t) => {
@@ -95,12 +90,13 @@ export default function VideoPlayer({ file, onControls, onError }) {
       return "auto";
     }
   });
-  const [playingQ, setPlayingQ] = useState("original");
+  // null until we know which copy to play, so the video never starts loading the big original
+  // and then jumps to a lighter copy (that switch was the "glitch" when opening a video).
+  const [playingQ, setPlayingQ] = useState(null);
   const [qStatus, setQStatus] = useState(null); // { short, options: [{ q, ready, progress }] }
   const [qualityMenu, setQualityMenu] = useState(false);
   const [notice, setNotice] = useState("");
   const switching = useRef(null); // { time, play } carried across a quality switch
-  const stalls = useRef([]);
   // Back (or a tap on the picture) closes an open speed / quality menu, not the viewer.
   useBackClose(speedMenu || qualityMenu, () => {
     setSpeedMenu(false);
@@ -122,7 +118,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
     const v = video.current;
     setPlayingQ((current) => {
       if (current === q) return current;
-      if (v) switching.current = { time: v.currentTime, play: !v.paused };
+      if (v && current !== null) switching.current = { time: v.currentTime, play: !v.paused };
       return q;
     });
   }, []);
@@ -137,22 +133,26 @@ export default function VideoPlayer({ file, onControls, onError }) {
     [name]
   );
 
-  // First look: what lighter copies exist, and pick the starting quality.
+  // First look: what lighter copies exist, and pick the starting quality before loading.
+  // Auto starts on the light copy the PC prepares in the background (720p, or 480p on a
+  // slow connection): it opens in a moment instead of pulling a huge 4K file first.
   useEffect(() => {
     let live = true;
+    // If the PC is slow to answer, don't keep the viewer waiting: just play the original.
+    const fallback = setTimeout(() => live && setPlayingQ((q) => q ?? "original"), 2500);
     const first = setTimeout(() => loadStatus().then((d) => {
-      if (!live || !d) return;
+      if (!live) return;
+      clearTimeout(fallback);
+      if (!d) return setPlayingQ((q) => q ?? "original");
       const ready = (q) => d.options.find((o) => o.q === q)?.ready;
-      if (typeof choice === "string" && choice !== "auto" && choice !== "original" && ready(Number(choice))) switchTo(Number(choice));
-      else if (choice === "auto" && slowConnection()) {
-        const best = d.options.find((o) => o.q <= 720 && o.ready);
-        if (best) switchTo(best.q);
-        else if (d.options.some((o) => o.q === 720)) prepare(720);
-      }
+      // Always the original file, unless you picked a lower quality yourself.
+      const start = typeof choice === "string" && choice !== "auto" && choice !== "original" && ready(Number(choice)) ? Number(choice) : "original";
+      setPlayingQ((q) => q ?? start);
     }), 0);
     return () => {
       live = false;
       clearTimeout(first);
+      clearTimeout(fallback);
     };
     // Only when a different video opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,7 +166,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
       const d = await loadStatus();
       if (!d) return;
       const wanted = choice === "auto" ? d.options.find((o) => o.q <= 720 && o.ready)?.q : Number(choice);
-      if (wanted && d.options.find((o) => o.q === wanted)?.ready && (choice !== "auto" || playingQ === "original")) {
+      if (wanted && d.options.find((o) => o.q === wanted)?.ready && choice !== "auto") {
         switchTo(wanted);
         if (choice === "auto") setNotice(`Switched to ${wanted}p for smoother playback`);
       }
@@ -193,24 +193,6 @@ export default function VideoPlayer({ file, onControls, onError }) {
       prepare(q);
       setQStatus((st) => st && { ...st, options: st.options.map((o) => (o.q === q ? { ...o, progress: 0 } : o)) });
       setNotice(`Preparing ${q}p on the studio PC… it'll switch over when ready`);
-    }
-  }
-
-  // Auto: if playback keeps pausing to load, step down to a lighter copy.
-  function onStall() {
-    if (choice !== "auto" || !playing) return;
-    const now = Date.now();
-    stalls.current = [...stalls.current.filter((t) => now - t < 20000), now];
-    if (stalls.current.length < 2) return;
-    stalls.current = [];
-    const lower = qStatus?.options.filter((o) => (playingQ === "original" ? true : o.q < playingQ));
-    const ready = lower?.find((o) => o.ready && o.q <= 720);
-    if (ready) {
-      switchTo(ready.q);
-      setNotice(`Switched to ${ready.q}p for smoother playback`);
-    } else if (lower?.some((o) => o.q === 720)) {
-      prepare(720);
-      setQStatus((st) => st && { ...st, options: st.options.map((o) => (o.q === 720 ? { ...o, progress: o.progress ?? 0 } : o)) });
     }
   }
 
@@ -416,7 +398,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
     >
       <video
         ref={video}
-        src={playingQ === "original" ? fileUrl(file) : `/api/stream?name=${encodeURIComponent(name)}&q=${playingQ}&k=${file.key}`}
+        src={playingQ === null ? undefined : playingQ === "original" ? fileUrl(file) : `/api/stream?name=${encodeURIComponent(name)}&q=${playingQ}&k=${file.key}`}
         poster={thumbUrl(file)}
         autoPlay
         playsInline
@@ -459,10 +441,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
           writeResume(file.key, 0);
           show(true);
         }}
-        onWaiting={() => {
-          setWaiting(true);
-          onStall();
-        }}
+        onWaiting={() => setWaiting(true)}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
         onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
