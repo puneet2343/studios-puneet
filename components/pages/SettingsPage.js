@@ -14,6 +14,7 @@ import {
   CopyIcon,
   DownloadIcon,
   DriveIcon,
+  LockIcon,
   LogoutIcon,
   MonitorIcon,
   MoonIcon,
@@ -158,6 +159,7 @@ function ThisPhone() {
         {!status.allOld && (
           <Row icon={CloudCheckIcon} title="Back up older photos too" subtitle="Also send everything that was on this phone before" onClick={() => app.backupAll()} />
         )}
+        <Row icon={LockIcon} title="Lock the app now" subtitle="Fingerprint or PIN needed to open it again (it also locks by itself after 1 hour)" onClick={() => app.lockNow()} />
         <Row icon={PhoneIcon} title="Use Wi-Fi only" subtitle="Don't use mobile data for backup" right={<Toggle label="Use Wi-Fi only" on={status.wifiOnly} onChange={(on) => app.setWifiOnly(on)} />} />
         <Row icon={CloudCheckIcon} title="Pause backup" subtitle="Nothing is sent until you turn this off" right={<Toggle label="Pause backup" on={status.paused} onChange={(on) => app.setPaused(on)} />} />
       </Section>

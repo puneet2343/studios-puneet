@@ -19,10 +19,10 @@ import android.widget.TextView;
 import java.security.MessageDigest;
 
 // Locks the app (not the background backup) behind the fingerprint, with a PIN as the
-// other way in. After unlocking it stays open for 10 minutes, even if you leave and come
-// back, then asks again.
+// other way in. After unlocking it stays open for 1 hour, even if you leave and come
+// back, then asks again. "Lock now" in the app locks it straight away.
 public class AppLock {
-    private static final long OPEN_FOR_MS = 10 * 60 * 1000L;
+    private static final long OPEN_FOR_MS = 60 * 60 * 1000L; // open for 1 hour after unlocking
     // SHA-256 of the PIN (from android/secrets.properties at build time, never in the code).
     private static final String PIN_SHA256 = Secrets.PIN_SHA256;
     private static final int MAX_TRIES = 5;
@@ -62,6 +62,12 @@ public class AppLock {
             return;
         }
         if (prompting) return;
+        show();
+    }
+
+    /** "Lock now": ask for the fingerprint / PIN again right away. */
+    void lockNow() {
+        prefs().edit().putLong("unlockedAt", 0).apply();
         show();
     }
 

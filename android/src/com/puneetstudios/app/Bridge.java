@@ -160,6 +160,12 @@ public class Bridge {
         });
     }
 
+    // The lock button in the app.
+    @JavascriptInterface
+    public void lockNow() {
+        activity.runOnUiThread(activity::lockNow);
+    }
+
     @JavascriptInterface
     public void setTheme(boolean dark) {
         activity.setDark(dark);

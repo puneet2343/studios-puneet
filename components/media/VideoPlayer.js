@@ -56,7 +56,9 @@ function writeResume(key, time) {
  * double-click = full screen. Keys: space/k, j/l, m, f.
  * `onControls(visible)` lets the viewer fade its own header in step.
  */
-export default function VideoPlayer({ file, onControls, onError }) {
+// `hold`: keep the controls up (e.g. the viewer's More menu is open). `poke`: changes when
+// the viewer's own bars are touched, which counts as using the controls.
+export default function VideoPlayer({ file, onControls, onError, hold = false, poke = 0 }) {
   const video = useRef(null);
   const root = useRef(null);
   const bar = useRef(null);
@@ -81,6 +83,10 @@ export default function VideoPlayer({ file, onControls, onError }) {
   // Back (or a tap on the picture) closes the speed menu, not the viewer.
   useBackClose(speedMenu, () => setSpeedMenu(false));
   const downAt = useRef(null); // where the finger went down, to tell taps from swipes
+  const holdRef = useRef(hold);
+  useEffect(() => {
+    holdRef.current = hold;
+  }, [hold]);
 
   // ----- Controls visibility -----
   const show = useCallback((stay = false) => {
@@ -88,14 +94,26 @@ export default function VideoPlayer({ file, onControls, onError }) {
     clearTimeout(hideTimer.current);
     if (!stay) {
       hideTimer.current = setTimeout(() => {
-        if (video.current && !video.current.paused) setControls(false);
+        if (video.current && !video.current.paused && !holdRef.current) setControls(false);
       }, HIDE_AFTER_MS);
     }
   }, []);
 
+  // Touching the viewer's bars (Download, Favourite, More…) keeps everything visible a while
+  // longer; while a menu is open nothing hides; when it closes, the usual timer starts again.
   useEffect(() => {
-    onControls?.(controls);
-  }, [controls, onControls]);
+    if (!poke) return;
+    const t = setTimeout(() => show(), 0);
+    return () => clearTimeout(t);
+  }, [poke, show]);
+  useEffect(() => {
+    if (hold) return;
+    const t = setTimeout(() => show(), 0);
+    return () => clearTimeout(t);
+  }, [hold, show]);
+  useEffect(() => {
+    onControls?.(controls || hold);
+  }, [controls, hold, onControls]);
   useEffect(() => () => clearTimeout(hideTimer.current), []);
 
   // ----- Playback -----
@@ -267,7 +285,7 @@ export default function VideoPlayer({ file, onControls, onError }) {
   const pct = duration ? (shown / duration) * 100 : 0;
   const bufferedPct = duration ? (buffered / duration) * 100 : 0;
   // Menus keep the controls up, so they never fade away mid-choice.
-  const controlsOn = controls || !playing || scrub !== null || speedMenu;
+  const controlsOn = controls || hold || !playing || scrub !== null || speedMenu;
   const fade = `transition-opacity duration-200 ${controlsOn ? "opacity-100" : "pointer-events-none opacity-0"}`;
 
   return (

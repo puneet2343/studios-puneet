@@ -42,6 +42,7 @@ export const app = {
   signedIn: (username, password) => call("signedIn", String(username), String(password)),
   backupAll: () => call("backupAll"),
   checkUpdate: () => call("checkUpdate"),
+  lockNow: () => call("lockNow"),
   setTheme: (dark) => call("setTheme", Boolean(dark)),
 };
 

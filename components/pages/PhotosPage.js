@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CloseIcon, HeartIcon, PhotosIcon, PlayIcon, SearchIcon, UploadIcon } from "@/components/icons";
+import { CloseIcon, HeartIcon, LockIcon, PhotosIcon, PlayIcon, SearchIcon, UploadIcon } from "@/components/icons";
 import { EmptyPhotosArt } from "@/components/Illustrations";
 import MediaBrowser from "@/components/library/MediaBrowser";
 import { useLibrary } from "@/components/library/store";
 import { usePeople } from "@/components/library/people";
+import { app, useInApp } from "@/components/appBridge";
 import PageHeader, { Chips, HeaderButton } from "@/components/shell/PageHeader";
 import useBackClose from "@/components/useBackClose";
 
@@ -42,6 +43,7 @@ export default function PhotosPage() {
 
   const media = useMemo(() => (files ?? []).filter(isMedia), [files]);
   const { people } = usePeople();
+  const inApp = useInApp();
 
   // Search by what's in the photo ("beach", "cake"…): asked from the PC, which has looked at
   // every photo (lib/ai.js). Waits a moment after typing stops.
@@ -115,6 +117,11 @@ export default function PhotosPage() {
             actions={
               searching ? null : (
                 <>
+                  {inApp && (
+                    <HeaderButton label="Lock the app" onClick={() => app.lockNow()}>
+                      <LockIcon size={21} />
+                    </HeaderButton>
+                  )}
                   <HeaderButton label="Search" onClick={() => setSearching(true)}>
                     <SearchIcon size={21} />
                   </HeaderButton>

@@ -431,6 +431,10 @@ public class MainActivity extends Activity {
         return total;
     }
 
+    void lockNow() {
+        if (lock != null) lock.lockNow();
+    }
+
     int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }

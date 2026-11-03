@@ -26,6 +26,21 @@ import { downloadUrl, fileUrl, thumbUrl } from "@/components/media/urls";
 import { formatDuration, formatSize } from "@/lib/format";
 
 const SWIPE_PX = 60;
+const SLIDE_MS = 230;
+const GAP = 16; // space between items while sliding
+
+// The item waiting beside the current one: its thumbnail, so sliding shows it right away.
+function Peek({ file, offset }) {
+  const visual = file.kind === "image" || file.kind === "video";
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center" style={{ transform: `translateX(${offset})` }}>
+      {visual && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={thumbUrl(file)} alt="" className="h-full w-full object-contain" draggable={false} />
+      )}
+    </div>
+  );
+}
 
 function IconButton({ label, onClick, href, download, danger, children, caption }) {
   const className = `flex min-w-11 flex-col items-center justify-center gap-0.5 rounded-full px-1 transition-colors ${caption ? "h-14 sm:h-12" : "h-11"} ${
@@ -48,7 +63,7 @@ function IconButton({ label, onClick, href, download, danger, children, caption 
   );
 }
 
-function Stage({ file, onControls, onTap }) {
+function Stage({ file, onControls, onTap, hold, poke }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -65,7 +80,7 @@ function Stage({ file, onControls, onTap }) {
   }
 
   if (file.kind === "video") {
-    return <VideoPlayer file={file} onControls={onControls} onError={() => setFailed(true)} />;
+    return <VideoPlayer file={file} onControls={onControls} hold={hold} poke={poke} onError={() => setFailed(true)} />;
   }
 
   if (file.kind === "audio") {
@@ -80,7 +95,7 @@ function Stage({ file, onControls, onTap }) {
         src={thumbUrl(file)}
         alt=""
         aria-hidden="true"
-        className={`absolute inset-0 h-full w-full object-contain blur-[2px] transition-opacity duration-300 ${
+        className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
           fullLoaded ? "opacity-0" : "opacity-100"
         }`}
       />
@@ -103,28 +118,44 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
   useBackClose(more, () => setMore(false));
   const [chrome, setChrome] = useState(true); // tap the photo to hide/show controls
   const [drag, setDrag] = useState(null); // { dx, dy } while a finger is down
-  const [enterFrom, setEnterFrom] = useState(null); // slide direction for the next file
+  const [slide, setSlide] = useState(0); // where the strip glides to when changing item
+  const [snap, setSnap] = useState(false); // one frame without animation, after the change
+  const [poke, setPoke] = useState(0); // touching the bars keeps the video controls up
+  const sliding = useRef(false);
   const gesture = useRef(null);
 
-  function go(target, from) {
-    setEnterFrom(from);
-    onNavigate(target.path);
+  // The previous and next items wait just beside this one (a strip, like a real gallery).
+  // Changing item glides the strip a full screen over, then quietly re-centres it on the
+  // new item, so nothing jumps or fades.
+  function go(target, dir) {
+    if (!target || sliding.current) return;
+    sliding.current = true;
+    const width = window.innerWidth + GAP;
+    setSlide(dir > 0 ? -width : width);
+    setTimeout(() => {
+      setSnap(true);
+      setSlide(0);
+      onNavigate(target.path);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setSnap(false);
+          sliding.current = false;
+        })
+      );
+    }, SLIDE_MS);
   }
 
   useEffect(() => {
     function onKey(e) {
       if (e.target.closest?.("input, textarea, [role=dialog]")) return;
       if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowLeft" && prev) {
-        setEnterFrom("left");
-        onNavigate(prev.path);
-      } else if (e.key === "ArrowRight" && next) {
-        setEnterFrom("right");
-        onNavigate(next.path);
-      } else if (e.key === "Delete") onDelete([file.path]);
+      else if (e.key === "ArrowLeft") go(prev, -1);
+      else if (e.key === "ArrowRight") go(next, 1);
+      else if (e.key === "Delete") onDelete([file.path]);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file.path, prev, next, onClose, onNavigate, onDelete]);
 
   // (No early loading of the next photo: originals aren't cached on the phone, so it would
@@ -171,8 +202,9 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
     const d = drag;
     setDrag(null);
     if (!g?.axis || !d) return;
-    if (g.axis === "x" && d.dx < -SWIPE_PX && next) go(next, "right");
-    else if (g.axis === "x" && d.dx > SWIPE_PX && prev) go(prev, "left");
+    // From wherever the finger let go, the strip carries on to the next item.
+    if (g.axis === "x" && d.dx < -SWIPE_PX && next) go(next, 1);
+    else if (g.axis === "x" && d.dx > SWIPE_PX && prev) go(prev, -1);
     else if (g.axis === "y" && d.dy > SWIPE_PX * 1.8) onClose();
   }
 
@@ -190,8 +222,8 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
   const dragging = Boolean(drag);
   const pull = drag?.dy ?? 0;
   const stageStyle = {
-    transform: `translate3d(${drag?.dx ?? 0}px, ${pull}px, 0) scale(${1 - Math.min(pull, 400) / 1600})`,
-    transition: dragging ? "none" : "transform 260ms var(--ease-out)",
+    transform: `translate3d(${(drag?.dx ?? 0) + slide}px, ${pull}px, 0) scale(${1 - Math.min(pull, 400) / 1600})`,
+    transition: dragging || snap ? "none" : `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
   };
   const fade = `transition-[opacity,transform] duration-200 ${chrome && !pull ? "opacity-100" : "pointer-events-none opacity-0"}`;
   const moreItems = [
@@ -215,6 +247,7 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
       onTouchCancel={onTouchEnd}
     >
       <header
+        onPointerDown={() => setPoke((p) => p + 1)}
         className={`relative z-20 flex items-center gap-1 bg-gradient-to-b from-black/70 to-transparent px-2 pb-4 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-3 ${fade} ${
           chrome ? "" : "-translate-y-2"
         }`}
@@ -239,31 +272,28 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
           if (!e.target.closest("video, button, a, aside, [data-player], [data-zoomable]")) setChrome((c) => !c);
         }}
       >
-        <div className="flex h-full w-full items-center justify-center will-change-transform" style={stageStyle}>
-          <div
-            key={file.path ?? file.name}
-            className={`flex h-full w-full items-center justify-center ${
-              enterFrom === "right" ? "anim-from-right" : enterFrom === "left" ? "anim-from-left" : "anim-pop"
-            }`}
-          >
-            <Stage file={file} onControls={setChrome} onTap={() => setChrome((c) => !c)} />
+        <div className="relative h-full w-full will-change-transform" style={stageStyle}>
+          {prev && <Peek file={prev} offset={`calc(-100% - ${GAP}px)`} />}
+          <div key={file.path ?? file.name} className="absolute inset-0 flex items-center justify-center">
+            <Stage file={file} onControls={setChrome} onTap={() => setChrome((c) => !c)} hold={more || showInfo} poke={poke} />
           </div>
+          {next && <Peek file={next} offset={`calc(100% + ${GAP}px)`} />}
         </div>
 
         {/* Previous / next: on phones too (swiping sideways also works). */}
         {prev && (
-          <button onClick={() => go(prev, "left")} aria-label="Previous" className={`${arrow} left-2 sm:left-4 ${fade}`}>
+          <button onClick={() => go(prev, -1)} aria-label="Previous" className={`${arrow} left-2 sm:left-4 ${fade}`}>
             <ChevronLeftIcon size={22} />
           </button>
         )}
         {next && (
-          <button onClick={() => go(next, "right")} aria-label="Next" className={`${arrow} right-2 sm:right-4 ${fade}`}>
+          <button onClick={() => go(next, 1)} aria-label="Next" className={`${arrow} right-2 sm:right-4 ${fade}`}>
             <ChevronRightIcon size={22} />
           </button>
         )}
       </div>
 
-      <footer className={`relative z-20 bg-gradient-to-t from-black/75 to-transparent px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-4 ${fade}`}>
+      <footer onPointerDown={() => setPoke((p) => p + 1)} className={`relative z-20 bg-gradient-to-t from-black/75 to-transparent px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-4 ${fade}`}>
         <div className="mx-auto flex max-w-md items-center justify-around">
           <IconButton label="Download original" caption="Download" href={downloadUrl(file)} download={file.name}>
             <DownloadIcon size={21} />
