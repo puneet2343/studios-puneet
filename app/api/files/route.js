@@ -65,11 +65,11 @@ export async function GET(request) {
   }
   if (!stat.isFile()) return notFound();
 
-  // With ?v=<content key> the URL changes whenever the file does, so it can be cached forever.
-  const versioned = request.nextUrl.searchParams.has("v");
   const headers = {
     "Content-Type": mimeType(file.name),
-    "Cache-Control": versioned ? "private, max-age=31536000, immutable" : "private, no-cache",
+    // Originals are never kept in the phone's cache: a library full of photos and videos
+    // would make the app grow by gigabytes. (Downloads save a file on purpose, separately.)
+    "Cache-Control": "private, no-store",
     "Last-Modified": stat.mtime.toUTCString(),
     "Content-Disposition": `${
       request.nextUrl.searchParams.has("download") ? "attachment" : "inline"

@@ -70,6 +70,8 @@ self.addEventListener("message", (event) => {
 async function warm(paths) {
   const pages = await caches.open(PAGES);
   const assets = await caches.open(ASSETS);
+  const needed = new Set();
+  let complete = true;
   for (const p of paths) {
     try {
       const res = await fetch(p, { credentials: "include" });
@@ -81,7 +83,14 @@ async function warm(paths) {
         const a = await fetch(u).catch(() => null);
         if (a?.ok) await assets.put(u, a);
       }
-    } catch {}
+    } catch {
+      complete = false;
+    }
+  }
+  // Files from older versions of the app are no longer needed: remove them, so the cache
+  // never grows (the PC rebuilds the app every time it changes).
+  if (complete && needed.size) {
+    for (const req of await assets.keys()) if (!needed.has(req.url)) await assets.delete(req);
   }
 }
 

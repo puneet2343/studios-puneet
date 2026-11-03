@@ -127,12 +127,8 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
     return () => window.removeEventListener("keydown", onKey);
   }, [file.path, prev, next, onClose, onNavigate, onDelete]);
 
-  // Warm the cache for neighbouring photos so swiping feels instant.
-  useEffect(() => {
-    for (const f of [prev, next]) {
-      if (f?.kind === "image") new Image().src = fileUrl(f);
-    }
-  }, [prev, next]);
+  // (No early loading of the next photo: originals aren't cached on the phone, so it would
+  // download twice. The thumbnail shows at once while the full photo loads.)
 
   useEffect(() => {
     const original = document.body.style.overflow;

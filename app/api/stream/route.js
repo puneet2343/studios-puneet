@@ -29,7 +29,7 @@ export async function GET(request) {
   return serveFile(request, file, stat.size, {
     "Content-Type": "video/mp4",
     // The URL carries the original's content key, so a cached copy is never stale.
-    "Cache-Control": "private, max-age=86400",
+    "Cache-Control": "private, no-store",
   });
 }
 

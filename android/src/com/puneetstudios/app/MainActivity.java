@@ -197,6 +197,7 @@ public class MainActivity extends Activity {
         // Fingerprint / PIN before anything is shown (stays open 10 minutes after unlocking).
         lock = new AppLock(this, root);
         lock.check();
+        keepCacheSmall();
         web.loadUrl(Settings.of(this).server());
         if (Settings.of(this).isSignedIn()) {
             SyncJob.schedule(this, false);
@@ -409,6 +410,25 @@ public class MainActivity extends Activity {
         } else if (code == REQ_DELETE) {
             bridge.onDeleted(result == RESULT_OK);
         }
+    }
+
+    // The app should never grow on its own: originals are never cached (the PC says so),
+    // and if the browser cache still passes 100 MB it's cleared (sign-in and settings stay).
+    // A leftover downloaded update is removed too.
+    private void keepCacheSmall() {
+        new java.io.File(getCacheDir(), "update.apk").delete();
+        new Thread(() -> {
+            long size = folderSize(getCacheDir());
+            if (size > 100L * 1024 * 1024) runOnUiThread(() -> web.clearCache(true));
+        }).start();
+    }
+
+    private static long folderSize(java.io.File f) {
+        if (f.isFile()) return f.length();
+        long total = 0;
+        java.io.File[] list = f.listFiles();
+        if (list != null) for (java.io.File c : list) total += folderSize(c);
+        return total;
     }
 
     int dp(int v) {
