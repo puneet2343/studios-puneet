@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CloseIcon, HeartIcon, LockIcon, PhotosIcon, PlayIcon, SearchIcon, UploadIcon } from "@/components/icons";
 import { EmptyPhotosArt } from "@/components/Illustrations";
 import MediaBrowser from "@/components/library/MediaBrowser";
+import Memories, { useMemories } from "@/components/library/Memories";
 import { useLibrary } from "@/components/library/store";
 import { usePeople } from "@/components/library/people";
 import { app, useInApp } from "@/components/appBridge";
@@ -40,10 +41,13 @@ export default function PhotosPage() {
     setQuery("");
   });
   useBackClose(filter !== "all", () => setFilter("all"));
+  const [memory, setMemory] = useState(null); // an "On this day" card that is open
+  useBackClose(Boolean(memory), () => setMemory(null));
 
   const media = useMemo(() => (files ?? []).filter(isMedia), [files]);
   const { people } = usePeople();
   const inApp = useInApp();
+  const memories = useMemories(media);
 
   // Search by what's in the photo ("beach", "cake"…): asked from the PC, which has looked at
   // every photo (lib/ai.js). Waits a moment after typing stops.
@@ -70,6 +74,7 @@ export default function PhotosPage() {
   }, [searching]);
 
   const shown = useMemo(() => {
+    if (memory) return memory.items;
     const q = query.trim().toLowerCase();
     const kindOk = (f) => filter === "all" || (filter === "favorites" ? f.favorite : f.kind === "video");
     if (!q) return media.filter(kindOk);
@@ -82,7 +87,7 @@ export default function PhotosPage() {
     media.filter((f) => matches(f, q)).forEach(add);
     if (smart.q.toLowerCase() === q) smart.paths.forEach((path) => add(byPath.get(path)));
     return out;
-  }, [media, filter, query, people, smart]);
+  }, [media, filter, query, people, smart, memory]);
 
   const counts = useMemo(() => ({ favorites: media.filter((f) => f.favorite).length, videos: media.filter((f) => f.kind === "video").length }), [media]);
 
@@ -90,7 +95,7 @@ export default function PhotosPage() {
     <div className="mx-auto w-full max-w-7xl flex-1 pb-28 sm:px-6 lg:px-8 lg:pb-12">
       <MediaBrowser
         files={shown}
-        grouped={!query.trim()}
+        grouped={!query.trim() && !memory}
         uploadTo=""
         empty={
           files === null ? (
@@ -112,10 +117,15 @@ export default function PhotosPage() {
       >
         {({ upload }) => (
           <PageHeader
-            title={searching ? "" : "Photos"}
-            version={!searching}
+            title={searching ? "" : memory ? memory.label : "Photos"}
+            subtitle={memory ? new Date(memory.cover.taken).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) + ` · ${memory.items.length} ${memory.items.length === 1 ? "item" : "items"}` : undefined}
+            version={!searching && !memory}
             actions={
-              searching ? null : (
+              memory ? (
+                <HeaderButton label="Close" onClick={() => setMemory(null)}>
+                  <CloseIcon size={21} />
+                </HeaderButton>
+              ) : searching ? null : (
                 <>
                   {inApp && (
                     <HeaderButton label="Lock the app" onClick={() => app.lockNow()}>
@@ -156,7 +166,8 @@ export default function PhotosPage() {
                 </button>
               </div>
             )}
-            {media.length > 0 && (
+            {!searching && !memory && filter === "all" && <Memories memories={memories} onOpen={setMemory} />}
+            {media.length > 0 && !memory && (
               <Chips
                 value={filter}
                 onChange={setFilter}

@@ -319,6 +319,7 @@ export default function SettingsPage() {
           </div>
         )}
         <Row icon={TrashIcon} title="Recycle Bin" subtitle="Deleted items, kept for 3 days" href="/trash" />
+        <Row icon={SparkIcon} title="Clean up similar photos" subtitle="Repeated shots and copies: keep the best one, free space" href="/cleanup" />
         <Row icon={CopyIcon} title="Duplicates" subtitle="Find copies and free space on the PC" href="/duplicates" />
         {!inApp && (
           <div className="px-4 py-2">

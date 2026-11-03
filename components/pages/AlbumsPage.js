@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Dialog, { Button } from "@/components/Dialog";
 import { useToast } from "@/components/Toaster";
-import { CalendarIcon, DotsIcon, UsersIcon, FolderIcon, HeartFilledIcon, PencilIcon, PlaneIcon, PlayIcon, PlusIcon, SparkIcon, TrashIcon, UploadIcon } from "@/components/icons";
+import { CalendarIcon, DotsIcon, UsersIcon, FolderIcon, HeartFilledIcon, PencilIcon, PlaneIcon, PlayIcon, PlusIcon, ShareIcon, SparkIcon, TrashIcon, UploadIcon } from "@/components/icons";
+import ShareDialog from "@/components/library/ShareDialog";
 import { EmptyTripsArt } from "@/components/Illustrations";
 import MediaBrowser from "@/components/library/MediaBrowser";
 import { Face, MergeDialog, NamePersonDialog, usePeople, updatePerson } from "@/components/library/people";
@@ -351,6 +352,8 @@ function AlbumView({ open, files, trips, onClose, onEditTrip, onChanged, tripDia
   const [confirm, setConfirm] = useState(null); // "delete-album" | "remove-trip" | "hide-person"
   const [naming, setNaming] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  useBackClose(sharing, () => setSharing(false));
   const person = open.type === "person" ? people.find((p) => p.id === open.id) : null;
   useBackClose(menu, () => setMenu(false));
 
@@ -418,6 +421,11 @@ function AlbumView({ open, files, trips, onClose, onEditTrip, onChanged, tripDia
             onBack={onClose}
             actions={
               <>
+                {path && shown.length > 0 && (
+                  <HeaderButton label="Share album" onClick={() => setSharing(true)}>
+                    <ShareIcon size={20} />
+                  </HeaderButton>
+                )}
                 {path && (
                   <HeaderButton label="Upload here" onClick={upload}>
                     <UploadIcon size={20} />
@@ -453,6 +461,7 @@ function AlbumView({ open, files, trips, onClose, onEditTrip, onChanged, tripDia
         )}
       </MediaBrowser>
 
+      {sharing && path && <ShareDialog album={path} title={title} onClose={() => setSharing(false)} />}
       {renaming && (
         <NameDialog
           title="Rename album"

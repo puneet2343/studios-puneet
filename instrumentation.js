@@ -16,5 +16,8 @@ export async function register() {
     // Watchdog: a phone that has gone quiet, a backup drive that is out of date.
     const { startHealthWatch } = await import("./lib/health");
     startHealthWatch();
+    // Best-shot cleanup: how sharp each photo is, measured once.
+    const { startBestShotWorker } = await import("./lib/bestshot");
+    startBestShotWorker();
   }
 }

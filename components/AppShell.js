@@ -17,7 +17,7 @@ const TABS = [
   { label: "Photos", href: "/", icon: PhotosIcon },
   { label: "Albums", href: "/albums", icon: AlbumsIcon },
   { label: "Map", href: "/map", icon: MapIcon },
-  { label: "Settings", href: "/settings", icon: GearIcon, also: ["/trash", "/duplicates", "/history", "/updates"] },
+  { label: "Settings", href: "/settings", icon: GearIcon, also: ["/trash", "/duplicates", "/history", "/updates", "/cleanup"] },
 ];
 const AUTH_HINT = "ps.authed";
 
