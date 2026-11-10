@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   BackTenIcon,
   ChartIcon,
   CheckIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
@@ -23,6 +25,7 @@ import {
   SpeedIcon,
   VolumeIcon,
 } from "@/components/icons";
+import { app } from "@/components/appBridge";
 import { fileUrl, thumbUrl } from "@/components/media/urls";
 import useBackClose from "@/components/useBackClose";
 
@@ -91,7 +94,10 @@ function writeResume(key, time) {
  * up (a viewer menu is open); `poke` changes when the viewer's bars are touched.
  * `upNext` (the next item, if it's a video) and `onUpNext` drive Autoplay.
  */
-export default function VideoPlayer({ file, onControls, onError, onMenu, hold = false, poke = 0, upNext = null, onUpNext }) {
+// `bare`: the mini player (just the picture; its own buttons are outside). `apiRef` gets
+// { toggle } so those buttons can play/pause; `onState({ playing, time, duration })` reports
+// for the mini player's button and progress line.
+export default function VideoPlayer({ file, onControls, onError, onMenu, onClose, onPrev, onSwipeDown, hold = false, poke = 0, upNext = null, onUpNext, bare = false, apiRef, onState }) {
   const video = useRef(null);
   const root = useRef(null);
   const bar = useRef(null);
@@ -102,6 +108,8 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
   const press = useRef(null); // { x, y, timer, held, type }
   const restore = useRef(null); // { time, playing } carried across a source change
   const holdRef = useRef(hold);
+  const menuOpen = useRef(false);
+  const statsOpen = useRef(false);
 
   // ----- What we're playing -----
   const [status, setStatus] = useState(null); // from /api/stream
@@ -144,6 +152,7 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
   // The box the picture fills (contain), so controls sit on the video itself.
   const [aspect, setAspect] = useState(() => (file.width && file.height ? file.width / file.height : 0));
   const [box, setBox] = useState(null);
+  const [filling, setFilling] = useState(false);
   useEffect(() => {
     const el = root.current;
     if (!el || !aspect) return;
@@ -157,6 +166,8 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
         w = H * aspect;
       }
       setBox({ w: Math.round(w), h: Math.round(h) });
+      // Filling the whole screen (phone turned sideways): lay out like full screen.
+      setFilling(H >= window.innerHeight - 2 && W >= window.innerWidth - 2);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -169,7 +180,9 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
   useBackClose(stats, () => setStats(false));
   useEffect(() => {
     holdRef.current = hold || Boolean(menu);
-  }, [hold, menu]);
+    menuOpen.current = Boolean(menu);
+    statsOpen.current = stats;
+  }, [hold, menu, stats]);
   useEffect(() => {
     const t = setTimeout(() => {
       setFine(window.matchMedia("(pointer: fine)").matches);
@@ -402,21 +415,39 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
       else {
-        await (el.requestFullscreen?.() ?? video.current?.webkitEnterFullscreen?.());
-        // Landscape videos turn the phone sideways, like YouTube's full screen.
+        // Landscape videos turn the phone sideways, like YouTube's full screen (the phone
+        // app turns the screen itself; a browser uses the orientation lock).
         const v = video.current;
-        if (v && v.videoWidth > v.videoHeight) await screen.orientation?.lock?.("landscape").catch(() => {});
+        const wide = v && v.videoWidth > v.videoHeight;
+        // The phone app: full screen follows the phone any way it's turned (sideways videos start sideways).
+        app.setOrientation(wide ? "landscape" : "free");
+        await (el.requestFullscreen?.() ?? video.current?.webkitEnterFullscreen?.());
+        if (wide) await screen.orientation?.lock?.("landscape").catch(() => {});
       }
-    } catch {}
+    } catch {
+      // Full screen was refused: give the phone its normal rotation back.
+      if (!document.fullscreenElement) app.setOrientation("auto");
+    }
   }, []);
   useEffect(() => {
     const onChange = () => {
       const on = Boolean(document.fullscreenElement);
       setFullscreen(on);
-      if (!on) screen.orientation?.unlock?.();
+      if (!on) {
+        screen.orientation?.unlock?.();
+        app.setOrientation("auto");
+      }
+    };
+    // The phone app saw the phone held upright again: leave full screen (YouTube does this).
+    const onApp = (e) => {
+      if (e.detail?.type === "rotation" && !e.detail.sideways && document.fullscreenElement) document.exitFullscreen().catch(() => {});
     };
     document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    window.addEventListener("puneetapp", onApp);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      window.removeEventListener("puneetapp", onApp);
+    };
   }, []);
 
   const togglePip = useCallback(async () => {
@@ -481,12 +512,19 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
 
   // ===================================================================== Keyboard (YouTube's keys)
   useEffect(() => {
+    if (bare) return; // the mini player leaves the keys to the page you're on
     function onKey(e) {
       if (e.target.closest?.("input, textarea, [role=dialog]") || e.ctrlKey || e.metaKey || e.altKey) return;
       const v = video.current;
       if (!v) return;
       const k = e.key;
       const lower = k.toLowerCase();
+      // Escape closes the settings menu / stats first (full screen is left by the browser).
+      if (k === "Escape" && (menuOpen.current || statsOpen.current)) {
+        setMenu(null);
+        setStats(false);
+        return;
+      }
       if (k === " " || lower === "k") {
         e.preventDefault();
         bubble({ icon: togglePlay() ? "play" : "pause" });
@@ -519,7 +557,15 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [show, skipFrom, togglePlay, toggleFullscreen, togglePip, seekTo, seekBy, setVol, setSpeed, bubble]);
+  }, [bare, show, skipFrom, togglePlay, toggleFullscreen, togglePip, seekTo, seekBy, setVol, setSpeed, bubble]);
+
+  // For the mini player's own buttons and progress line.
+  useEffect(() => {
+    if (apiRef) apiRef.current = { toggle: togglePlay };
+  }, [apiRef, togglePlay]);
+  useEffect(() => {
+    onState?.({ playing, time, duration });
+  }, [onState, playing, time, duration]);
 
   // ===================================================================== Touch & mouse on the picture
   function onSurfaceDown(e) {
@@ -568,6 +614,7 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
     if (e.pointerType !== "mouse" && Math.abs(dy) > 60 && Math.abs(dy) > Math.abs(dx) * 1.5) {
       if (dy < 0 && !document.fullscreenElement) toggleFullscreen();
       else if (dy > 0 && document.fullscreenElement) toggleFullscreen();
+      else if (dy > 0) onSwipeDown?.(); // YouTube: swipe the video down to put it away
       return;
     }
     if (Math.hypot(dx, dy) > 12) return;
@@ -655,9 +702,75 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
       : pref === "auto"
         ? `Auto${playingQ ? ` (${playingQ}p)` : ""}`
         : `${pref}p`;
-  const hd = playingQ >= 720;
   const fade = `transition-opacity duration-200 ${controlsOn ? "opacity-100" : "pointer-events-none opacity-0"}`;
   const ui = { pointerEvents: controlsOn ? "auto" : "none" };
+  // Loading shows only the spinner; the controls don't pop up for it.
+  const loading = waiting && !ended && (playing || !mode) && !stuck;
+  const roundBtn = (size) => `flex ${size} items-center justify-center rounded-full bg-black/40 text-[#fff] transition-transform active:scale-90`;
+
+  // ----- Pieces shared by the phone and computer layouts -----
+  const seekBar = (
+    <div
+      ref={bar}
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={Math.round(duration)}
+      aria-valuenow={Math.round(shown)}
+      aria-valuetext={`${clock(shown)} of ${clock(duration)}`}
+      tabIndex={0}
+      onPointerDown={onBarDown}
+      onPointerMove={onBarMove}
+      onPointerUp={onBarUp}
+      onPointerLeave={() => setHover(null)}
+      onPointerCancel={() => setScrub(null)}
+      className="group relative flex h-6 cursor-pointer touch-none items-center"
+    >
+      <div className={`relative w-full rounded-full bg-white/25 transition-[height] duration-100 ${scrub !== null ? "h-[5px]" : "h-[3px] group-hover:h-[5px]"}`}>
+        <div className="absolute inset-y-0 left-0 rounded-full bg-white/40" style={{ width: `${bufferedPct}%` }} />
+        {hover !== null && scrub === null && <div className="absolute inset-y-0 left-0 rounded-full bg-white/50" style={{ width: `${hover * 100}%` }} />}
+        <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct}%`, background: RED }} />
+      </div>
+      <div
+        className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-transform duration-100 ${scrub !== null ? "h-4 w-4 scale-110" : "h-3.5 w-3.5 scale-0 group-hover:scale-100 max-sm:scale-100"}`}
+        style={{ left: `${pct}%`, background: RED }}
+      />
+      {previewAt !== null && duration > 0 && <Preview at={previewAt} duration={duration} storyboard={status?.storyboard} sbUrl={status?.key && `/api/hls/${status.key}/storyboard.jpg`} big={scrub !== null && !fine} />}
+    </div>
+  );
+  const timeText = (
+    <span className="ml-1 whitespace-nowrap text-[13px] font-medium tabular-nums">
+      {clock(shown)} <span className="text-[#fff]/60">/ {clock(duration)}</span>
+    </span>
+  );
+  const autoplayButton = (
+    <button
+      aria-label={`Autoplay is ${autoplay ? "on" : "off"}`}
+      title={`Autoplay is ${autoplay ? "on" : "off"}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        setAutoplay((a) => (save(STORE.autoplay, !a), !a));
+      }}
+      className="mx-1.5 flex h-11 items-center"
+    >
+      <Toggle on={autoplay} />
+    </button>
+  );
+  const gearButton = (
+    <BarButton label="Settings" onClick={() => setMenu((m) => (m ? null : "main"))}>
+      <GearIcon size={21} className={`transition-transform duration-300 ${menu ? "rotate-45" : ""}`} />
+      {playingQ >= 720 && (
+        <span className="absolute right-1 top-1.5 rounded-[3px] px-[3px] text-[8px] font-bold leading-[11px] text-[#fff]" style={{ background: RED }}>
+          {playingQ >= 2160 ? "4K" : "HD"}
+        </span>
+      )}
+    </BarButton>
+  );
+  const fullscreenButton = (
+    <BarButton label={fullscreen ? "Exit full screen (f)" : "Full screen (f)"} onClick={toggleFullscreen}>
+      {fullscreen ? <ShrinkIcon size={21} /> : <ExpandIcon size={21} />}
+    </BarButton>
+  );
 
   return (
     <div
@@ -674,7 +787,7 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
       onContextMenu={(e) => e.preventDefault()}
       // While holding for 2×, a moving finger mustn't become a swipe in the viewer.
       onTouchMove={(e) => boost && e.stopPropagation()}
-      className={`relative flex h-full w-full select-none items-center justify-center overflow-hidden bg-black ${controlsOn ? "" : "cursor-none"}`}
+      className={`relative flex h-full w-full select-none items-center justify-center overflow-hidden bg-black ${bare ? "pointer-events-none" : controlsOn ? "" : "cursor-none"}`}
     >
       {/* The video and its controls sit in a box the shape of the video, like YouTube:
           the bar and buttons are on the picture, not at the bottom of the screen. */}
@@ -757,6 +870,8 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
         onError={onVideoError}
       />
 
+      {!bare && (
+      <>
       {/* Double-tap left/right ripple */}
       {skip && (
         <div
@@ -788,38 +903,23 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
         </div>
       )}
 
-      {/* Middle: play / pause (phones), or the spinner while loading */}
+      {/* While loading: only the spinner (no controls popping up), like YouTube. */}
       {stuck ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-8 text-center text-[#fff]">
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-white/25 border-t-white" />
           <p className="text-sm font-medium">Getting this video ready to play here…</p>
           <p className="text-xs text-[#fff]/60">{status?.progress != null ? `${Math.round(status.progress * 100)}%` : "Waiting for the PC"}</p>
         </div>
-      ) : waiting && !ended && (playing || !mode) ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-white/20 border-t-white" aria-label="Loading" />
-        </div>
-      ) : countdown === null && (!fine || !playing || ended) ? (
-        <div className={`pointer-events-none absolute inset-0 flex items-center justify-center ${fade}`}>
-          <button
-            data-control
-            aria-label={ended ? "Replay" : playing ? "Pause" : "Play"}
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePlay();
-              show();
-            }}
-            style={ui}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-[#fff] backdrop-blur-sm transition-transform active:scale-90"
-          >
-            {ended ? <ReplayIcon size={28} strokeWidth={2.2} /> : playing ? <PauseIcon size={26} /> : <PlayIcon size={26} className="translate-x-0.5" />}
-          </button>
-        </div>
-      ) : null}
-
+      ) : (
+        loading && (
+          <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+            <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-white/20 border-t-white" aria-label="Loading" />
+          </div>
+        )
+      )}
 
       {resumed > 0 && (
-        <div data-control className="anim-rise absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full bg-black/70 py-1.5 pl-4 pr-1.5 text-xs text-[#fff] backdrop-blur">
+        <div data-control className="anim-rise absolute left-1/2 top-12 z-[2] flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full bg-black/70 py-1.5 pl-4 pr-1.5 text-xs text-[#fff] backdrop-blur">
           Carrying on from {clock(resumed)}
           <button
             onClick={() => {
@@ -833,112 +933,119 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
         </div>
       )}
 
-
-      {/* While the controls are hidden, a thin progress line stays at the bottom. */}
-      {!controlsOn && duration > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-white/20">
-          <div className="h-full" style={{ width: `${pct}%`, background: RED }} />
-        </div>
+      {fine ? (
+        <>
+          {/* ===== Computer (YouTube desktop): bar, then one row of buttons ===== */}
+          {countdown === null && (!playing || ended) && !loading && (
+            <div className={`pointer-events-none absolute inset-0 flex items-center justify-center ${fade}`}>
+              <button data-control aria-label={ended ? "Replay" : "Play"} onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlay();
+                }} style={ui} className={roundBtn("h-16 w-16")}>
+                {ended ? <ReplayIcon size={28} strokeWidth={2.2} /> : <PlayIcon size={26} className="translate-x-0.5" />}
+              </button>
+            </div>
+          )}
+          <div data-control className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-3 pt-16 sm:px-4 ${fade}`} style={ui}>
+            {seekBar}
+            <div className="flex h-12 items-center gap-0.5 pb-1 text-[#fff]">
+              <BarButton label={ended ? "Replay (k)" : playing ? "Pause (k)" : "Play (k)"} onClick={() => togglePlay()}>
+                {ended ? <ReplayIcon size={22} strokeWidth={2.2} /> : playing ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+              </BarButton>
+              {upNext && onUpNext && (
+                <BarButton label="Next (Shift+N)" onClick={onUpNext}>
+                  <SkipNextIcon size={20} />
+                </BarButton>
+              )}
+              <span className="group/vol flex items-center">
+                <BarButton label={muted || volume === 0 ? "Unmute (m)" : "Mute (m)"} onClick={() => (video.current.muted = !video.current.muted)}>
+                  {muted || volume === 0 ? <MuteIcon size={21} /> : <VolumeIcon size={21} />}
+                </BarButton>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={muted ? 0 : volume}
+                  onChange={(e) => setVol(Number(e.target.value))}
+                  aria-label="Volume"
+                  className="yt-volume w-0 opacity-0 transition-all duration-200 group-hover/vol:mr-2 group-hover/vol:w-16 group-hover/vol:opacity-100 focus:mr-2 focus:w-16 focus:opacity-100"
+                  style={{ "--fill": `${(muted ? 0 : volume) * 100}%` }}
+                />
+              </span>
+              {timeText}
+              <span className="flex-1" />
+              {upNext && onUpNext && autoplayButton}
+              {gearButton}
+              {canPip && (
+                <BarButton label={pip ? "Exit picture-in-picture (i)" : "Picture-in-picture (i)"} onClick={togglePip}>
+                  <PipIcon size={21} />
+                </BarButton>
+              )}
+              {fullscreenButton}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* ===== Phone (YouTube mobile): dimmed picture; close + autoplay + gear on top;
+               previous · play · next in the middle; time + full screen at the bottom,
+               with the red bar along the bottom edge. ===== */}
+          <div className={`pointer-events-none absolute inset-0 bg-black/40 ${fade}`} />
+          <div data-control className={`absolute inset-x-0 top-0 flex items-center px-1 pt-1 text-[#fff] ${fade}`} style={ui}>
+            {onClose && !fullscreen && (
+              <BarButton label="Close" onClick={onClose}>
+                <ChevronDownIcon size={26} />
+              </BarButton>
+            )}
+            <span className="flex-1" />
+            {upNext && onUpNext && autoplayButton}
+            {gearButton}
+          </div>
+          {countdown === null && !loading && (
+            <div className={`pointer-events-none absolute inset-0 flex items-center justify-center gap-[12%] ${fade}`}>
+              <button data-control aria-label="Previous video" onClick={(e) => {
+                  e.stopPropagation();
+                  onPrev?.();
+                }} style={{ ...ui, visibility: onPrev ? "visible" : "hidden" }} className={roundBtn("h-12 w-12")}>
+                <SkipNextIcon size={22} className="rotate-180" />
+              </button>
+              <button data-control aria-label={ended ? "Replay" : playing ? "Pause" : "Play"} onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlay();
+                  show();
+                }} style={ui} className={roundBtn("h-16 w-16")}>
+                {ended ? <ReplayIcon size={30} strokeWidth={2.2} /> : playing ? <PauseIcon size={30} /> : <PlayIcon size={30} className="translate-x-0.5" />}
+              </button>
+              <button data-control aria-label="Next video" onClick={(e) => {
+                  e.stopPropagation();
+                  onUpNext?.();
+                }} style={{ ...ui, visibility: upNext && onUpNext ? "visible" : "hidden" }} className={roundBtn("h-12 w-12")}>
+                <SkipNextIcon size={22} />
+              </button>
+            </div>
+          )}
+          <div data-control className={`absolute inset-x-0 bottom-0 text-[#fff] ${fade}`} style={ui}>
+            <div className="flex items-center px-3">
+              {timeText}
+              <span className="flex-1" />
+              <BarButton label={muted || volume === 0 ? "Unmute" : "Mute"} onClick={() => (video.current.muted = !video.current.muted)}>
+                {muted || volume === 0 ? <MuteIcon size={20} /> : <VolumeIcon size={20} />}
+              </BarButton>
+              {fullscreenButton}
+            </div>
+            <div className={fullscreen || filling ? "px-4 pb-3" : "-mb-2.5"}>{seekBar}</div>
+          </div>
+        </>
       )}
 
-      {/* ===== Bottom controls: seek bar, then the button row ===== */}
-      <div data-control className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent px-3 pt-16 sm:px-4 ${fade}`} style={ui}>
-        <div
-          ref={bar}
-          role="slider"
-          aria-label="Seek"
-          aria-valuemin={0}
-          aria-valuemax={Math.round(duration)}
-          aria-valuenow={Math.round(shown)}
-          aria-valuetext={`${clock(shown)} of ${clock(duration)}`}
-          tabIndex={0}
-          onPointerDown={onBarDown}
-          onPointerMove={onBarMove}
-          onPointerUp={onBarUp}
-          onPointerLeave={() => setHover(null)}
-          onPointerCancel={() => setScrub(null)}
-          className="group relative flex h-6 cursor-pointer touch-none items-center"
-        >
-          <div className={`relative w-full rounded-full bg-white/25 transition-[height] duration-100 ${scrub !== null ? "h-[5px]" : "h-[3px] group-hover:h-[5px]"}`}>
-            <div className="absolute inset-y-0 left-0 rounded-full bg-white/40" style={{ width: `${bufferedPct}%` }} />
-            {hover !== null && scrub === null && <div className="absolute inset-y-0 left-0 rounded-full bg-white/50" style={{ width: `${hover * 100}%` }} />}
-            <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct}%`, background: RED }} />
-          </div>
-          <div
-            className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-transform duration-100 ${scrub !== null ? "h-4 w-4 scale-110" : "h-3.5 w-3.5 scale-0 group-hover:scale-100 max-sm:scale-100"}`}
-            style={{ left: `${pct}%`, background: RED }}
-          />
-          {previewAt !== null && duration > 0 && <Preview at={previewAt} duration={duration} storyboard={status?.storyboard} sbUrl={status?.key && `/api/hls/${status.key}/storyboard.jpg`} big={scrub !== null && !fine} />}
-        </div>
-
-        <div className="flex h-12 items-center gap-0.5 pb-1 text-[#fff]">
-          {fine && (
-            <BarButton label={ended ? "Replay (k)" : playing ? "Pause (k)" : "Play (k)"} onClick={() => togglePlay()}>
-              {ended ? <ReplayIcon size={22} strokeWidth={2.2} /> : playing ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
-            </BarButton>
-          )}
-          {fine && upNext && onUpNext && (
-            <BarButton label="Next (Shift+N)" onClick={onUpNext}>
-              <SkipNextIcon size={20} />
-            </BarButton>
-          )}
-          <span className="group/vol flex items-center">
-            <BarButton label={muted || volume === 0 ? "Unmute (m)" : "Mute (m)"} onClick={() => (video.current.muted = !video.current.muted)}>
-              {muted || volume === 0 ? <MuteIcon size={21} /> : <VolumeIcon size={21} />}
-            </BarButton>
-            {fine && (
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={muted ? 0 : volume}
-                onChange={(e) => setVol(Number(e.target.value))}
-                aria-label="Volume"
-                className="yt-volume w-0 opacity-0 transition-all duration-200 group-hover/vol:mr-2 group-hover/vol:w-16 group-hover/vol:opacity-100 focus:mr-2 focus:w-16 focus:opacity-100"
-                style={{ "--fill": `${(muted ? 0 : volume) * 100}%` }}
-              />
-            )}
-          </span>
-          <span className="ml-1 whitespace-nowrap text-[13px] font-medium tabular-nums">
-            {clock(shown)} <span className="text-[#fff]/60">/ {clock(duration)}</span>
-          </span>
-          <span className="flex-1" />
-          {fine && upNext && onUpNext && (
-            <button
-              aria-label={`Autoplay is ${autoplay ? "on" : "off"}`}
-              title={`Autoplay is ${autoplay ? "on" : "off"}`}
-              onClick={() => {
-                setAutoplay((a) => (save(STORE.autoplay, !a), !a));
-              }}
-              className="mx-1.5 flex h-11 items-center"
-            >
-              <Toggle on={autoplay} />
-            </button>
-          )}
-          <span className="relative">
-            <BarButton label="Settings" onClick={() => setMenu((m) => (m ? null : "main"))}>
-              <GearIcon size={21} className={`transition-transform duration-300 ${menu ? "rotate-45" : ""}`} />
-              {(hd || mode === "original") && playingQ >= 720 && (
-                <span className="absolute right-1 top-1.5 rounded-[3px] px-[3px] text-[8px] font-bold leading-[11px] text-[#fff]" style={{ background: RED }}>
-                  {playingQ >= 2160 ? "4K" : "HD"}
-                </span>
-              )}
-            </BarButton>
-          </span>
-          {canPip && (
-            <BarButton label={pip ? "Exit picture-in-picture (i)" : "Picture-in-picture (i)"} onClick={togglePip}>
-              <PipIcon size={21} />
-            </BarButton>
-          )}
-          <BarButton label={fullscreen ? "Exit full screen (f)" : "Full screen (f)"} onClick={toggleFullscreen}>
-            {fullscreen ? <ShrinkIcon size={21} /> : <ExpandIcon size={21} />}
-          </BarButton>
-        </div>
+      </>
+      )}
       </div>
 
-      </div>
-
+      {/* Everything on top of the picture: not in the mini player (it has its own buttons). */}
+      {!bare && (
+      <>
       {/* Up next (Autoplay) */}
       {countdown !== null && upNext && (
         <div data-control className="anim-fade absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/75 px-6 text-[#fff]">
@@ -982,6 +1089,7 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
           page={menu}
           setPage={setMenu}
           sheet={!fine}
+          portal={!fullscreen}
           qualityText={qualityText}
           rate={rate}
           loop={loop}
@@ -1001,6 +1109,8 @@ export default function VideoPlayer({ file, onControls, onError, onMenu, hold = 
           quality={{ pref, mode, ready, ladder, levels, playingQ, originalLabel, progress: status?.progress, failed: status?.failed }}
           onQuality={chooseQuality}
         />
+      )}
+      </>
       )}
     </div>
   );
@@ -1047,7 +1157,7 @@ function Toggle({ on }) {
 
 // ----- The gear menu: Quality, Playback speed, Loop, Autoplay, Stats for nerds.
 // A panel above the bar on a computer; a sheet from the bottom on a phone.
-function SettingsMenu({ page, setPage, sheet, qualityText, rate, loop, autoplay, showAutoplay, stats, onLoop, onAutoplay, onStats, onSpeed, quality, onQuality }) {
+function SettingsMenu({ portal, page, setPage, sheet, qualityText, rate, loop, autoplay, showAutoplay, stats, onLoop, onAutoplay, onStats, onSpeed, quality, onQuality }) {
   const row = "flex w-full items-center gap-4 px-4 text-left text-sm text-[#fff] transition-colors hover:bg-white/10 active:bg-white/10 " + (sheet ? "h-14" : "h-11");
   const header = (title) => (
     <button onClick={() => setPage("main")} className={`${row} border-b border-white/10 font-medium`}>
@@ -1140,14 +1250,16 @@ function SettingsMenu({ page, setPage, sheet, qualityText, rate, loop, autoplay,
   }
 
   if (sheet) {
-    return (
-      <div data-control className="absolute inset-0 z-30 flex items-end bg-black/40" onClick={(e) => e.target === e.currentTarget && setPage(null)}>
+    // Over the whole screen (like YouTube), except in full screen where only the player shows.
+    const el = (
+      <div data-control className={`${portal ? "fixed z-[70]" : "absolute z-30"} inset-0 flex items-end bg-black/40`} onClick={(e) => e.target === e.currentTarget && setPage(null)}>
         <div className="anim-rise mx-auto max-h-[85%] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-[#212121] pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-2xl">
           <div className="mx-auto mb-1 h-1 w-9 rounded-full bg-white/25" />
           {body}
         </div>
       </div>
     );
+    return portal ? createPortal(el, document.body) : el;
   }
   return (
     <div data-control className="anim-pop absolute bottom-16 right-3 z-30 w-72 overflow-hidden rounded-xl bg-[#1c1c1c]/95 py-1.5 shadow-2xl backdrop-blur">

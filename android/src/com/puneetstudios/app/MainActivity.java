@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
     private View customView;
     private WebChromeClient.CustomViewCallback customCallback;
     private boolean dark = true;
+    VideoRotation rotation;
     private boolean loadFailed = false;
     // While the PC can't be reached, try again by itself every few seconds.
     private final Runnable retry = new Runnable() {
@@ -105,6 +106,10 @@ public class MainActivity extends Activity {
         web.setBackgroundColor(Color.TRANSPARENT);
 
         bridge = new Bridge(this, web);
+        // Videos turn with the phone, like YouTube (see VideoRotation). The page is told, so it
+        // can leave full screen when the phone is held upright again.
+        rotation = new VideoRotation(this, sideways -> runOnUiThread(() -> web.evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('puneetapp',{detail:{type:'rotation',sideways:" + sideways + "}}))", null)));
         web.addJavascriptInterface(bridge, "PuneetApp");
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -171,6 +176,8 @@ public class MainActivity extends Activity {
                 }
                 customView = view;
                 customCallback = callback;
+                // Full screen follows the phone any way it's turned (if the page didn't say already).
+                if (rotation != null && !rotation.isFull()) rotation.enterFullScreen(false);
                 root.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                 web.setVisibility(View.GONE);
                 getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
@@ -183,6 +190,8 @@ public class MainActivity extends Activity {
                 root.removeView(customView);
                 customView = null;
                 web.setVisibility(View.VISIBLE);
+                // Leaving full screen: back to the watch page, upright.
+                if (rotation != null) rotation.leftFullScreen();
                 applyBars();
                 if (customCallback != null) customCallback.onCustomViewHidden();
                 root.requestApplyInsets();
@@ -209,6 +218,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        if (rotation != null) rotation.resume();
         if (lock != null) lock.check();
         Updater.check(this, false, null);
         if (Settings.of(this).isSignedIn()) SyncService.start(this);
@@ -217,6 +227,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         web.onPause();
+        if (rotation != null) rotation.pause();
         super.onPause();
     }
 
@@ -235,6 +246,15 @@ public class MainActivity extends Activity {
     void setDark(boolean on) {
         dark = on;
         runOnUiThread(this::applyBars);
+    }
+
+    // A video filling the screen sideways: hide the status and navigation bars (swipe to peek).
+    void videoBars(boolean hide) {
+        if (!hide) {
+            applyBars();
+            return;
+        }
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
 
     private void applyBars() {

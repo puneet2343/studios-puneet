@@ -112,6 +112,27 @@ public class Updater {
         }
     }
 
+    private static final String CHANNEL = "app_update";
+    private static final int NOTE_ID = 4207;
+
+    static void notifyReady(Context c, Intent confirm) {
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm.getNotificationChannel(CHANNEL) == null) {
+                nm.createNotificationChannel(new android.app.NotificationChannel(CHANNEL, "App updates", android.app.NotificationManager.IMPORTANCE_HIGH));
+            }
+            PendingIntent tap = PendingIntent.getActivity(c, NOTE_ID, confirm, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            nm.notify(NOTE_ID, new android.app.Notification.Builder(c, CHANNEL)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentTitle("Puneet Studios update ready")
+                    .setContentText("Tap to install the new version")
+                    .setContentIntent(tap)
+                    .setAutoCancel(true)
+                    .build());
+        } catch (Exception ignored) {
+        }
+    }
+
     /** Android's answer: if it wants a confirmation, show its "Update" screen. */
     public static class Result extends BroadcastReceiver {
         @Override
@@ -125,6 +146,9 @@ public class Updater {
                         context.startActivity(confirm);
                     } catch (Exception ignored) {
                     }
+                    // Android blocks that screen when the app isn't on top (that's how version
+                    // 3.6 got stuck). A notification always gets through: tap it to install.
+                    notifyReady(context, confirm);
                 }
             }
         }

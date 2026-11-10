@@ -9,6 +9,7 @@ import Logo from "@/components/Logo";
 import Toaster, { useToast } from "@/components/Toaster";
 import { AlbumsIcon, EyeIcon, EyeOffIcon, GearIcon, MapIcon, PhotosIcon, RefreshIcon, WifiOffIcon } from "@/components/icons";
 import { clearLibraryCache, setUnauthorizedHandler } from "@/components/library/store";
+import WatchHost from "@/components/media/WatchHost";
 import { useExitGuard } from "@/components/useBackClose";
 
 // Four places, like Google Photos: Photos (everything by date), Albums (trips, albums,
@@ -211,6 +212,9 @@ export default function AppShell({ children }) {
               {children}
             </div>
           </main>
+
+          {/* The video being watched: full page, or the mini player above the tabs. */}
+          <WatchHost />
 
           {/* Phone: four tabs at the bottom, the active one in a soft pill. */}
           <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-background pb-[env(safe-area-inset-bottom)] lg:hidden">

@@ -171,6 +171,24 @@ public class Bridge {
         activity.setDark(dark);
     }
 
+    // Videos turn with the phone, like YouTube (VideoRotation).
+    // setWatching(true): a sideways video is open, so follow how the phone is held.
+    @JavascriptInterface
+    public void setWatching(final boolean sideways) {
+        activity.runOnUiThread(() -> activity.rotation.watch(sideways));
+    }
+
+    // Full screen: "landscape" (a sideways video) or "free" (any other) = entered full screen,
+    // the screen now follows the phone any way it's turned; "auto" = left full screen.
+    @JavascriptInterface
+    public void setOrientation(final String mode) {
+        activity.runOnUiThread(() -> {
+            if ("landscape".equals(mode)) activity.rotation.enterFullScreen(true);
+            else if ("free".equals(mode)) activity.rotation.enterFullScreen(false);
+            else activity.rotation.leftFullScreen();
+        });
+    }
+
     // ----- Free up space -----
     // Only files the PC confirms it has (same name and size) are offered for removal.
     @JavascriptInterface

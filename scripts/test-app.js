@@ -43,8 +43,20 @@ async function setup() {
   for (const f of ["zz-test photo 1.jpg", "zz-test photo 2.jpg", "zz-test photo 3.jpg", "zz-test video.mp4"]) fs.utimesSync(path.join(MEDIA, f), t, t);
 }
 
+// Windows won't delete a file that's open (e.g. the PC making a test video's streaming copies): wait.
+const rmRetry = (p) => {
+  for (let i = 0; ; i++) {
+    try {
+      return fs.rmSync(p, { recursive: true, force: true });
+    } catch (e) {
+      if (i > 120 || !["EPERM", "EBUSY"].includes(e.code)) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+    }
+  }
+};
+
 function cleanup() {
-  const rm = (dir) => { for (const f of fs.readdirSync(dir)) if (f.includes("zz-test")) fs.rmSync(path.join(dir, f), { recursive: true, force: true }); };
+  const rm = (dir) => { for (const f of fs.readdirSync(dir)) if (f.includes("zz-test")) rmRetry(path.join(dir, f)); };
   rm(MEDIA);
   rm(path.join(MEDIA, ".trash"));
   const trips = path.join(MEDIA, ".meta", "trips.json");
@@ -132,7 +144,7 @@ function cleanup() {
   await sleep(2500);
   const srcLater = await js(`document.querySelector("video")?.getAttribute("src")`);
   check("Video opens and keeps one source (no mid-load switch)", Boolean(srcLater) && (!srcSoon || srcSoon === srcLater), String(srcLater).slice(0, 60));
-  check("Video viewer has arrows too", await has(label("Next")));
+  check("Video opens on the watch page with Up next", (await has(`document.querySelector("[data-watch-page] h1")`)) && (await text()).includes("Up next"));
   await shot("04-viewer-video");
   await back();
 

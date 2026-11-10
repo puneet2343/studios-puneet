@@ -61,6 +61,15 @@ export default function UpdatesPage() {
           </div>
         )}
         {label && <p className="mt-2 text-[13px] text-accent">{label}</p>}
+        {behind && (
+          <p className="mt-2 text-[13px] leading-relaxed text-zinc-400">
+            Android didn&apos;t ask?{" "}
+            <a href="/api/sync/app" download="PuneetStudios.apk" className="font-semibold text-accent underline">
+              Download version {latestApp.versionName}
+            </a>{" "}
+            and open it from the notification to install it over this one. Your sign-in and photos stay.
+          </p>
+        )}
       </div>
 
       <ol className="relative space-y-5 border-l-2 border-line pl-5">

@@ -29,9 +29,21 @@ function check(label, ok, extra = "") {
   if (!ok) failures++;
 }
 
+// Windows won't delete a file that's open (e.g. the PC making a test video's streaming copies): wait.
+const rmRetry = (p) => {
+  for (let i = 0; ; i++) {
+    try {
+      return fs.rmSync(p, { recursive: true, force: true });
+    } catch (e) {
+      if (i > 120 || !["EPERM", "EBUSY"].includes(e.code)) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+    }
+  }
+};
+
 function cleanup() {
   for (const dir of [MEDIA, path.join(MEDIA, ".trash")]) {
-    for (const f of fs.readdirSync(dir)) if (f.includes("zz-test")) fs.rmSync(path.join(dir, f), { recursive: true, force: true });
+    for (const f of fs.readdirSync(dir)) if (f.includes("zz-test")) rmRetry(path.join(dir, f));
   }
   for (const [file, key] of [["trips.json", "trips"]]) {
     const p = path.join(MEDIA, ".meta", file);
@@ -141,7 +153,8 @@ function cleanup() {
   const pending = new Map();
   const errors = [];
   const serverErrors = [];
-  const send = (method, params = {}) => new Promise((res) => { const n = ++id; pending.set(n, res); ws.send(JSON.stringify({ id: n, method, params })); });
+  // Every browser command gives up after 20 s, so a stuck page fails the test instead of hanging it.
+  const send = (method, params = {}) => new Promise((res) => { const n = ++id; pending.set(n, res); ws.send(JSON.stringify({ id: n, method, params })); setTimeout(() => { if (pending.has(n)) { pending.delete(n); console.log(`(stuck on ${method} ${JSON.stringify(params).slice(0, 120)})`); res({}); } }, 20000); });
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
     if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg.result ?? msg.error); pending.delete(msg.id); }
@@ -240,9 +253,10 @@ function cleanup() {
   // ----- Viewer tools on a video -----
   await go("/", 4000);
   await tap(`[...document.querySelectorAll("[data-path]")].find(e => e.dataset.path === ${JSON.stringify(aVideo)})`, 2500);
-  for (const [item, expect, name] of [["Details", "Camera", "m10-details"], ["Rename", "Rename", "m11-rename"], ["Trim video", "Trim", "m12-trim"], ["Rotate / mirror", "Rotate", "m13-rotate"], ["Save the sound", "Extract audio", "m14-audio"]]) {
-    await tap(label("More"), 600);
-    const ok = await tap(btn(item), 1500);
+  // The watch page's round buttons under the video (YouTube-style).
+  const pill = (t) => `[...document.querySelectorAll("[data-watch-page] button, [data-watch-page] a")].find(b => b.textContent.trim() === ${JSON.stringify(t)})`;
+  for (const [item, expect, name] of [["Details", "Camera", "m10-details"], ["Rename", "Rename", "m11-rename"], ["Trim", "Trim", "m12-trim"], ["Rotate", "Rotate", "m13-rotate"], ["Save sound", "Extract audio", "m14-audio"]]) {
+    const ok = await tap(pill(item), 1500);
     const t = await text();
     check(`Viewer › ${item} opens`, ok && t.toLowerCase().includes(expect.toLowerCase()));
     await shot(name);

@@ -8,6 +8,7 @@ import MediaGrid from "@/components/library/MediaGrid";
 import { albumsFrom, createAlbum, folderOf, moveFiles, refreshLibrary, removeFiles, renamePath, restoreFiles, setFavorite, useLibrary } from "@/components/library/store";
 import { NameDialog } from "@/components/media/Folders";
 import Viewer from "@/components/media/Viewer";
+import { setWatchTools, watch } from "@/components/media/watch";
 import TrimEditor from "@/components/media/TrimEditor";
 import RotateEditor from "@/components/media/RotateEditor";
 import ExtractAudioDialog from "@/components/media/ExtractAudioDialog";
@@ -150,6 +151,22 @@ export default function MediaBrowser({ files, grouped = true, uploadTo = null, e
   const openFile = index >= 0 ? files[index] : null;
   const chosen = files.filter((f) => selected.has(f.path));
 
+  // Videos open on the app-wide watch page / mini player (WatchHost), not in the photo viewer.
+  useEffect(() => {
+    if (openFile?.kind !== "video") return;
+    const t = setTimeout(() => {
+      watch.open(openFile, files);
+      setOpenPath(null);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [openFile, files]);
+
+  // The watch page's Rename / Trim / Rotate / Save sound / Add to album use this page's dialogs.
+  useEffect(
+    () => setWatchTools({ rename: setRenaming, trim: setTrimming, rotate: setRotating, audio: setAudioFor, addToAlbum: (file) => setPicking([file.path]) }),
+    []
+  );
+
   const remove = useCallback(
     async (paths) => {
       haptic("tap");
@@ -251,9 +268,10 @@ export default function MediaBrowser({ files, grouped = true, uploadTo = null, e
         />
       )}
 
-      {openFile && (
+      {openFile && openFile.kind !== "video" && (
         <Viewer
           file={openFile}
+          items={files}
           prev={files[index - 1] ?? null}
           next={files[index + 1] ?? null}
           position={`${index + 1} / ${files.length}`}
@@ -281,6 +299,7 @@ export default function MediaBrowser({ files, grouped = true, uploadTo = null, e
             if (r.error) return r.error;
             setRenaming(null);
             if (openPath === renaming.path) setOpenPath(r.path);
+            watch.renamed(renaming.path, r.path);
           }}
         />
       )}

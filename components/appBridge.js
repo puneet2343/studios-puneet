@@ -44,6 +44,9 @@ export const app = {
   checkUpdate: () => call("checkUpdate"),
   lockNow: () => call("lockNow"),
   setTheme: (dark) => call("setTheme", Boolean(dark)),
+  setOrientation: (mode) => call("setOrientation", String(mode)),
+  // A sideways video is open: the phone app turns the screen as the phone is turned.
+  setWatching: (sideways) => call("setWatching", Boolean(sideways)),
 };
 
 /** Live status of this phone's syncing (refreshes every 2 s while shown). */

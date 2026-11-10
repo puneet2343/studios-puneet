@@ -246,3 +246,16 @@ body > * { animation: fade-in 260ms var(--ease-out) backwards; }
   border-radius: 999px;
   background: #fff;
 }
+
+/* Watch page: a phone turned sideways shows just the video, filling the screen (YouTube). */
+@media (orientation: landscape) and (max-height: 520px) {
+  .yt-watch-player {
+    position: fixed !important;
+    inset: 0;
+    z-index: 60;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+  }
+}

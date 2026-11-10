@@ -73,7 +73,8 @@ function readyVideos() {
   const pending = new Map();
   const errors = [];
   const requests = [];
-  const send = (method, params = {}) => new Promise((resolve) => { const n = ++id; pending.set(n, resolve); ws.send(JSON.stringify({ id: n, method, params })); });
+  // Every browser command gives up after 20 s, so a stuck page fails the test instead of hanging it.
+  const send = (method, params = {}) => new Promise((resolve) => { const n = ++id; pending.set(n, resolve); ws.send(JSON.stringify({ id: n, method, params })); setTimeout(() => { if (pending.has(n)) { pending.delete(n); console.log(`(stuck on ${method} ${JSON.stringify(params).slice(0, 120)})`); resolve({}); } }, 20000); });
   ws.onmessage = (m) => {
     const msg = JSON.parse(m.data);
     if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg.result ?? msg.error); pending.delete(msg.id); }
@@ -95,10 +96,12 @@ function readyVideos() {
   const typeInto = (selector, t) => js(`(() => { const i = document.querySelector(${JSON.stringify(selector)}); i.focus(); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(i, ${JSON.stringify(t)}); i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
   const text = () => js("document.body.innerText");
   const shot = async (name) => fs.writeFileSync(path.join(outDir, `${name}.png`), Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+  // Points on the player (it sits at the top of the watch page): fx, fy = 0..1 across it.
+  const at = (fx, fy = 0.5) => js(`(() => { const r = document.querySelector("[data-player]").getBoundingClientRect(); return [Math.round(r.left + r.width * ${fx}), Math.round(r.top + r.height * ${fy})]; })()`);
   const V = (prop) => js(`document.querySelector("video")?.${prop}`);
   const showControls = async () => {
     if (!(await js(`Boolean([...document.querySelectorAll('[aria-label="Settings"]')].find(b => b.offsetParent && getComputedStyle(b.closest("[data-control]")).opacity === "1"))`))) {
-      await tapAt([195, 300], 700);
+      await tapAt(await at(0.5, 0.75), 700);
     }
   };
   const key = (k, extra = {}) => send("Input.dispatchKeyEvent", { type: "keyDown", key: k, text: k.length === 1 ? k : undefined, ...extra }).then(() => send("Input.dispatchKeyEvent", { type: "keyUp", key: k, ...extra }));
@@ -192,13 +195,14 @@ function readyVideos() {
   await js(`document.querySelector("video").currentTime = 5`);
   await sleep(800);
   const s0 = await V("currentTime");
-  await tapAt([350, 300], 60);
-  await tapAt([350, 300], 900);
+  const right = await at(0.85);
+  await tapAt(right, 60);
+  await tapAt(right, 900);
   const s1 = await V("currentTime");
   check("Double-tap right skips 10 s", s1 - s0 >= 9 && s1 - s0 <= 13, `${s0.toFixed(1)} → ${s1.toFixed(1)}`);
   await js(`document.querySelector("video").play()`);
   await sleep(1200);
-  await touch("touchStart", [[195, 300]]);
+  await touch("touchStart", [await at(0.5, 0.75)]);
   await sleep(900);
   const heldRate = await V("playbackRate");
   const pill = (await text()).includes("2x");
@@ -235,18 +239,68 @@ function readyVideos() {
   await tap(label("Close stats"), 400);
 
   // ---------- Autoplay: Up next at the end, if the next item is a video ----------
-  const nextIsVideo = await js(`Boolean(document.querySelector('[aria-label="Next"]'))`);
+  const nextIsVideo = await js(`Boolean(document.querySelector('[aria-label="Next video"]'))`);
   await js(`(() => { const v = document.querySelector("video"); v.currentTime = v.duration - 0.5; v.play(); })()`);
   await sleep(2500);
   const endText = await text();
-  if (/up next/i.test(endText)) {
+  if (/up next in/i.test(endText)) {
     check("At the end: Up next with a countdown, Cancel and Play now", endText.includes("Cancel") && endText.includes("Play now"));
     await shot("v08-phone-up-next");
     await tap(btn("Cancel"), 500);
-    check("Cancel stays on this video", !(await text()).includes("Up next"));
+    check("Cancel stays on this video", !/up next in/i.test(await text()));
   } else {
     check("At the end: Replay button (next item isn't a video)", await js(`Boolean(document.querySelector('[aria-label="Replay"]'))`), JSON.stringify({ ended: await V("ended"), t: await V("currentTime"), d: await V("duration"), btns: await js(`[...document.querySelectorAll("[data-player] button")].map(b => b.getAttribute("aria-label") || b.textContent).join(", ")`), spin: await js(`Boolean(document.querySelector("[aria-label=Loading]"))`) }));
   }
+
+  // ---------- Mini player (YouTube): ⌄ / Back / swipe down shrinks it; it keeps playing ----------
+  await js(`(() => { const v = document.querySelector("video"); v.currentTime = 3; v.play(); })()`);
+  await sleep(1200);
+  await showControls();
+  await tap(label("Close"), 1200);
+  const miniOn = await js(`Boolean(document.querySelector("[data-mini-player]")) && !document.querySelector("[data-watch-page]")`);
+  const m0 = await V("currentTime");
+  await sleep(1500);
+  const m1 = await V("currentTime");
+  check("⌄ shrinks the video to the mini player", miniOn);
+  check("…and it keeps playing", m1 > m0 && !(await V("paused")), `${m0?.toFixed(1)} → ${m1?.toFixed(1)} s`);
+  await shot("v08c-mini-player");
+  await tap(`[...document.querySelectorAll("nav a[href='/albums']")].find(a => a.offsetParent)`, 2500);
+  const m2 = await V("currentTime");
+  check("Mini player stays and plays on another tab (Albums)", (await js(`location.pathname`)) === "/albums" && (await js(`Boolean(document.querySelector("[data-mini-player]"))`)) && m2 > m1, `${m2?.toFixed(1)} s`);
+  await shot("v08d-mini-on-albums");
+  await tap(label("Pause"), 600);
+  check("Mini player's pause button pauses", await V("paused"));
+  await tap(label("Play"), 600);
+  check("…and play plays", !(await V("paused")));
+  const before3 = await V("currentTime");
+  await tap(`document.querySelector("[data-mini-player] p")`, 1500);
+  check("Tapping the mini player opens the watch page again", await js(`Boolean(document.querySelector("[data-watch-page]"))`));
+  check("…carrying on, not starting over", (await V("currentTime")) >= before3, `${before3?.toFixed(1)} → ${(await V("currentTime"))?.toFixed(1)} s`);
+  await js("history.back()");
+  await sleep(1000);
+  check("Back shrinks it to the mini player (doesn't stop it)", await js(`Boolean(document.querySelector("[data-mini-player]")) && Boolean(document.querySelector("video"))`));
+  const mp = await pos(`document.querySelector("[data-mini-player] p")`);
+  await touch("touchStart", [mp]);
+  for (let i = 1; i <= 6; i++) await send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: mp[0] + i * 30, y: mp[1], id: 0 }] });
+  await touch("touchEnd", []);
+  await sleep(900);
+  check("Swiping the mini player away closes it", !(await js(`Boolean(document.querySelector("video"))`)));
+  // Open the video again for the next checks.
+  await tap(`[...document.querySelectorAll("nav a[href='/']")].find(a => a.offsetParent)`, 2500);
+  await js(`${tileSel}?.scrollIntoView({ block: "center" })`);
+  await sleep(500);
+  await tap(tileSel, 4000);
+
+  // ---------- Phone turned sideways: the video fills the screen ----------
+  await send("Emulation.setDeviceMetricsOverride", { width: 844, height: 390, deviceScaleFactor: 2, mobile: true, screenOrientation: { type: "landscapePrimary", angle: 90 } });
+  await sleep(1200);
+  const fill = await js(`(() => { const r = document.querySelector("[data-player]").getBoundingClientRect(); return [r.width, r.height]; })()`);
+  check("Phone sideways: the video fills the whole screen", fill[0] >= 840 && fill[1] >= 386, fill.join("x"));
+  await shot("v08b-phone-landscape");
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await sleep(800);
+  const back2 = await js(`(() => { const r = document.querySelector("[data-player]").getBoundingClientRect(); return r.height; })()`);
+  check("Upright again: back to the watch page", back2 < 500, String(back2));
 
   // ---------- Computer size: keyboard, hover preview, volume ----------
   await send("Emulation.setTouchEmulationEnabled", { enabled: false });
@@ -262,7 +316,7 @@ function readyVideos() {
   await sleep(4500);
   await js(`document.querySelector("video").currentTime = 2`);
   await sleep(800);
-  const title = await js(`document.querySelector("header p")?.textContent`);
+  const title = await js(`document.querySelector("[data-watch-page] h1")?.textContent`);
   await key("k");
   await sleep(500);
   check("k pauses", await V("paused"));
@@ -276,7 +330,7 @@ function readyVideos() {
   a = await V("currentTime");
   await key("ArrowLeft", { code: "ArrowLeft", windowsVirtualKeyCode: 37 });
   await sleep(400);
-  check("← goes back 5 s (and stays on this video)", a - (await V("currentTime")) >= 4 && (await js(`document.querySelector("header p")?.textContent`)) === title);
+  check("← goes back 5 s (and stays on this video)", a - (await V("currentTime")) >= 4 && (await js(`document.querySelector("[data-watch-page] h1")?.textContent`)) === title);
   await key("m");
   await sleep(300);
   check("m mutes", await V("muted"));
@@ -300,12 +354,17 @@ function readyVideos() {
   await tap(label("Settings"), 600);
   await shot("v10-desktop-settings");
   await key("Escape");
-  if (await js(`Boolean(document.querySelector('[aria-label="Next"]'))`)) {
+  if (await js(`Boolean(document.querySelector('[aria-label="Next video"]'))`)) {
     await key("N", { shiftKey: true, modifiers: 8 });
     await sleep(1200);
-    check("Shift+N goes to the next item", (await js(`document.querySelector("header p")?.textContent`)) !== title || (await js(`location.search`)) !== "");
+    check("Shift+N goes to the next item", (await js(`document.querySelector("[data-watch-page] h1")?.textContent`)) !== title || (await js(`location.search`)) !== "");
   }
 
+  await js("history.back()");
+  await sleep(1200);
+  const dm = await js(`(() => { const r = document.querySelector("[data-mini-player]")?.getBoundingClientRect(); return r ? [Math.round(r.right), Math.round(r.bottom), Math.round(r.width)] : null; })()`);
+  check("Computer: Back makes a mini player in the bottom-right corner", Boolean(dm) && dm[0] > 1300 && dm[2] >= 380 && dm[2] <= 420, JSON.stringify(dm));
+  await shot("v11-desktop-mini");
   check("No page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
   ws.close();
   proc.kill();

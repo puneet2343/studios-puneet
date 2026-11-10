@@ -112,7 +112,7 @@ function Stage({ file, onControls, onTap, onMenu, hold, poke, upNext, onUpNext }
   );
 }
 
-export default function Viewer({ file, prev, next, position, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onExtractAudio, onFavorite, onAddToAlbum }) {
+export default function Viewer({ file, items, prev, next, position, onClose, onNavigate, onRename, onDelete, onTrim, onRotate, onExtractAudio, onFavorite, onAddToAlbum }) {
   const [showInfo, setShowInfo] = useState(false);
   const [more, setMore] = useState(false);
   useBackClose(more, () => setMore(false));
