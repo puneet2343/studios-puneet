@@ -5,7 +5,9 @@ import android.content.SharedPreferences;
 
 // Everything the app remembers: where the PC is, the login, choices and sync status.
 public class Settings {
-    public static final String DEFAULT_SERVER = "https://ssiplit1399-1.tail7b1858.ts.net";
+    public static final String DEFAULT_SERVER = "https://ssiplit1399.tail24b153.ts.net";
+    // Old address (Tailscale account 041): phones that saved it move to the new one automatically.
+    private static final String OLD_SERVER = "https://ssiplit1399-1.tail7b1858.ts.net";
 
     private final SharedPreferences p;
 
@@ -17,7 +19,10 @@ public class Settings {
         return new Settings(context);
     }
 
-    public String server() { return p.getString("server", DEFAULT_SERVER); }
+    public String server() {
+        String s = p.getString("server", DEFAULT_SERVER);
+        return s.startsWith(OLD_SERVER) ? DEFAULT_SERVER : s;
+    }
     public String username() { return p.getString("username", ""); }
     public String password() { return p.getString("password", ""); }
     public String cookie() { return p.getString("cookie", ""); }
