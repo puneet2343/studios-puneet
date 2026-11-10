@@ -16,6 +16,7 @@
     "@vladmandic/human": "^3.3.6",
     "archiver": "^7.0.1",
     "exif-reader": "^2.0.3",
+    "hls.js": "1.7.3",
     "leaflet": "^1.9.4",
     "next": "16.4.2",
     "react": "19.3.0",

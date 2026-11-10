@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CloseIcon, HeartIcon, LockIcon, PhotosIcon, PlayIcon, SearchIcon, UploadIcon } from "@/components/icons";
+import { CloseIcon, HeartIcon, ImageIcon, LockIcon, PhotosIcon, PlayIcon, ScreenshotIcon, SearchIcon, UploadIcon } from "@/components/icons";
 import { EmptyPhotosArt } from "@/components/Illustrations";
 import MediaBrowser from "@/components/library/MediaBrowser";
 import Memories, { useMemories } from "@/components/library/Memories";
@@ -13,6 +13,25 @@ import PageHeader, { Chips, HeaderButton } from "@/components/shell/PageHeader";
 import useBackClose from "@/components/useBackClose";
 
 const isMedia = (f) => f.kind === "image" || f.kind === "video";
+// Screenshots and screen recordings: the phone's "Screenshots" / "Screen recordings" album, or the
+// name the phone gives them (Screenshot_2026…, Screen_Recording_2026…).
+const isScreen = (f) => /(^|[\\/_\s-])(screenshots?|screen[\s_-]?recordings?|screen[\s_-]?shot)([\\/_\s.-]|$)/i.test(f.path);
+
+// What each filter chip keeps. "Photos" and "Videos" are camera shots only; screenshots and
+// screen recordings have their own chip.
+const FILTERS = {
+  all: () => true,
+  photos: (f) => f.kind === "image" && !isScreen(f),
+  videos: (f) => f.kind === "video" && !isScreen(f),
+  screenshots: isScreen,
+  favorites: (f) => f.favorite,
+};
+const EMPTY_TEXT = {
+  photos: "No photos yet.",
+  videos: "No videos yet.",
+  screenshots: "No screenshots yet.",
+  favorites: "No favourites yet. Tap ♡ on a photo to add it.",
+};
 
 // Search matches the album name, the file name, or the date ("oct", "2026", "17 oct").
 function matches(f, q) {
@@ -76,7 +95,7 @@ export default function PhotosPage() {
   const shown = useMemo(() => {
     if (memory) return memory.items;
     const q = query.trim().toLowerCase();
-    const kindOk = (f) => filter === "all" || (filter === "favorites" ? f.favorite : f.kind === "video");
+    const kindOk = FILTERS[filter] ?? FILTERS.all;
     if (!q) return media.filter(kindOk);
     // 1. People you named, 2. album / file name / date, 3. what the photo shows (best first).
     const byPath = new Map(media.map((f) => [f.path, f]));
@@ -89,7 +108,7 @@ export default function PhotosPage() {
     return out;
   }, [media, filter, query, people, smart, memory]);
 
-  const counts = useMemo(() => ({ favorites: media.filter((f) => f.favorite).length, videos: media.filter((f) => f.kind === "video").length }), [media]);
+  const counts = useMemo(() => Object.fromEntries(Object.entries(FILTERS).map(([id, ok]) => [id, media.filter(ok).length])), [media]);
 
   return (
     <div className="mx-auto w-full max-w-7xl flex-1 pb-28 sm:px-6 lg:px-8 lg:pb-12">
@@ -106,9 +125,7 @@ export default function PhotosPage() {
                 ? smart.loading || smart.q.toLowerCase() !== query.trim().toLowerCase()
                   ? "Looking through your photos…"
                   : `Nothing matches "${query}"`
-                : filter === "favorites"
-                  ? "No favourites yet. Tap ♡ on a photo to add it."
-                  : "No videos yet."}
+                : EMPTY_TEXT[filter]}
             </p>
           ) : (
             <EmptyLibrary />
@@ -173,8 +190,10 @@ export default function PhotosPage() {
                 onChange={setFilter}
                 options={[
                   { id: "all", label: "All", icon: PhotosIcon },
-                  { id: "favorites", label: "Favourites", icon: HeartIcon, count: counts.favorites },
+                  { id: "photos", label: "Photos", icon: ImageIcon, count: counts.photos },
                   { id: "videos", label: "Videos", icon: PlayIcon, count: counts.videos },
+                  { id: "screenshots", label: "Screenshots", icon: ScreenshotIcon, count: counts.screenshots },
+                  { id: "favorites", label: "Favourites", icon: HeartIcon, count: counts.favorites },
                 ]}
               />
             )}

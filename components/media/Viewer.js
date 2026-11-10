@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeftIcon,
   ChevronLeftIcon,
@@ -63,7 +63,7 @@ function IconButton({ label, onClick, href, download, danger, children, caption 
   );
 }
 
-function Stage({ file, onControls, onTap, hold, poke }) {
+function Stage({ file, onControls, onTap, onMenu, hold, poke, upNext, onUpNext }) {
   const [fullLoaded, setFullLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -80,7 +80,7 @@ function Stage({ file, onControls, onTap, hold, poke }) {
   }
 
   if (file.kind === "video") {
-    return <VideoPlayer file={file} onControls={onControls} hold={hold} poke={poke} onError={() => setFailed(true)} />;
+    return <VideoPlayer file={file} onControls={onControls} onMenu={onMenu} hold={hold} poke={poke} upNext={upNext} onUpNext={onUpNext} onError={() => setFailed(true)} />;
   }
 
   if (file.kind === "audio") {
@@ -121,8 +121,15 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
   const [slide, setSlide] = useState(0); // where the strip glides to when changing item
   const [snap, setSnap] = useState(false); // one frame without animation, after the change
   const [poke, setPoke] = useState(0); // touching the bars keeps the video controls up
+  const [playerMenu, setPlayerMenu] = useState(false); // the video's settings menu is open
   const sliding = useRef(false);
   const gesture = useRef(null);
+  // Autoplay: the player asks for the next video; a stable function, so its timers don't reset.
+  const goNext = useRef(null);
+  useEffect(() => {
+    goNext.current = () => go(next, 1);
+  });
+  const onUpNext = useCallback(() => goNext.current?.(), []);
 
   // The previous and next items wait just beside this one (a strip, like a real gallery).
   // Changing item glides the strip a full screen over, then quietly re-centres it on the
@@ -148,9 +155,14 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
   useEffect(() => {
     function onKey(e) {
       if (e.target.closest?.("input, textarea, [role=dialog]")) return;
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowLeft") go(prev, -1);
-      else if (e.key === "ArrowRight") go(next, 1);
+      // On a video, ← → seek (YouTube's keys); Shift+P / Shift+N go to the previous / next item.
+      const video = file.kind === "video";
+      if (e.key === "Escape") {
+        if (!document.fullscreenElement) onClose();
+      } else if (e.key === "ArrowLeft" && !video) go(prev, -1);
+      else if (e.key === "ArrowRight" && !video) go(next, 1);
+      else if (e.shiftKey && e.key.toLowerCase() === "p") go(prev, -1);
+      else if (e.shiftKey && e.key.toLowerCase() === "n") go(next, 1);
       else if (e.key === "Delete") onDelete([file.path]);
     }
     window.addEventListener("keydown", onKey);
@@ -173,6 +185,8 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
   function onTouchStart(e) {
     // Swipes work on photos and videos alike; only the player's own controls (seek bar,
     // buttons, menus) and a zoomed-in photo keep the finger to themselves.
+    // In full screen the player handles its own swipes (down = leave full screen).
+    if (document.fullscreenElement) return;
     if (e.touches.length > 1 || e.target.closest("button, a, aside, [role=dialog], [data-control], [data-zoomed]")) return;
     gesture.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, axis: null };
   }
@@ -275,18 +289,27 @@ export default function Viewer({ file, prev, next, position, onClose, onNavigate
         <div className="relative h-full w-full will-change-transform" style={stageStyle}>
           {prev && <Peek file={prev} offset={`calc(-100% - ${GAP}px)`} />}
           <div key={file.path ?? file.name} className="absolute inset-0 flex items-center justify-center">
-            <Stage file={file} onControls={setChrome} onTap={() => setChrome((c) => !c)} hold={more || showInfo} poke={poke} />
+            <Stage
+              file={file}
+              onControls={setChrome}
+              onTap={() => setChrome((c) => !c)}
+              hold={more || showInfo}
+              poke={poke}
+              onMenu={setPlayerMenu}
+              upNext={next?.kind === "video" ? next : null}
+              onUpNext={onUpNext}
+            />
           </div>
           {next && <Peek file={next} offset={`calc(100% + ${GAP}px)`} />}
         </div>
 
         {/* Previous / next: on phones too (swiping sideways also works). */}
-        {prev && (
+        {prev && !playerMenu && (
           <button onClick={() => go(prev, -1)} aria-label="Previous" className={`${arrow} left-2 sm:left-4 ${fade}`}>
             <ChevronLeftIcon size={22} />
           </button>
         )}
-        {next && (
+        {next && !playerMenu && (
           <button onClick={() => go(next, 1)} aria-label="Next" className={`${arrow} right-2 sm:right-4 ${fade}`}>
             <ChevronRightIcon size={22} />
           </button>

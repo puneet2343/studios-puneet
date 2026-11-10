@@ -19,5 +19,8 @@ export async function register() {
     // Best-shot cleanup: how sharp each photo is, measured once.
     const { startBestShotWorker } = await import("./lib/bestshot");
     startBestShotWorker();
+    // YouTube-style streaming: each video gets lighter copies in small pieces, made once.
+    const { startStreamWorker } = await import("./lib/renditions");
+    startStreamWorker();
   }
 }

@@ -78,6 +78,12 @@ export const ImageIcon = make(
     <path d="m21 16-5-5-9 9" />
   </>
 );
+export const ScreenshotIcon = make(
+  <>
+    <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
+    <path d="M10.5 5.5h3M9.5 9.5v-1h1M14.5 8.5h1v1M15.5 14.5v1h-1M9.5 15.5h1M9.5 14.5v1" />
+  </>
+);
 export const MusicIcon = make(
   <>
     <path d="M9 18V5l11-2v13" />
@@ -272,3 +278,13 @@ export const CloudCheckIcon = make(<path d="M7 18.5h10.5a4 4 0 0 0 .6-8 6 6 0 0 
 export const SlidersIcon = make(<path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5" />);
 export const LockIcon = make(<path d="M6.5 10.5h11a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19v-7a1.5 1.5 0 0 1 1.5-1.5zM8 10.5V8a4 4 0 0 1 8 0v2.5M12 14.5v2" />);
 export const ShareIcon = make(<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" />);
+// Video player
+export const SkipNextIcon = ({ size = 18, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <path d="M5.5 5.3v13.4a.8.8 0 0 0 1.2.7l9.6-6.7a.8.8 0 0 0 0-1.4L6.7 4.6a.8.8 0 0 0-1.2.7z" fill="currentColor" />
+    <rect x="16.5" y="4.5" width="2.6" height="15" rx="1" fill="currentColor" />
+  </svg>
+);
+export const PipIcon = make(<path d="M20 11V6.5A1.5 1.5 0 0 0 18.5 5h-13A1.5 1.5 0 0 0 4 6.5v11A1.5 1.5 0 0 0 5.5 19H10M13.5 13.5h6a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-4.5a1 1 0 0 1 1-1z" />);
+export const LoopIcon = make(<path d="M17 3.5 20 6.5l-3 3M20 6.5H8A4 4 0 0 0 4 10.5V11M7 20.5 4 17.5l3-3M4 17.5h12a4 4 0 0 0 4-4V13" />);
+export const QualityIcon = make(<path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5" />);
